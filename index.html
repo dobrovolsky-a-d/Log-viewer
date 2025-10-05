@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log Viewer (PWA) — Просмотр логов</title>
+  <meta name="description" content="Просмотр RomRaider/ECUFlash CSV-логов — AFR, RPM, MAF и т.д." />
+  <link rel="stylesheet" href="style.css">
+  <!-- Plotly CDN -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <!-- PapaParse CDN for robust CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Log Viewer</h1>
+    <p class="subtitle">Загружай CSV-лог и выбирай параметры для графиков — прямо в Safari на iPhone</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <label class="file-label">Выбрать CSV-файл
+        <input id="fileInput" type="file" accept=".csv,text/csv" />
+      </label>
+
+      <div class="options-row">
+        <label>Ось X:
+          <select id="xSelect">
+            <option value="Time">Время (Time)</option>
+            <option value="Engine Speed (rpm)">RPM (Engine Speed)</option>
+          </select>
+        </label>
+
+        <button id="plotBtn" class="btn" disabled>Построить график</button>
+        <button id="savePngBtn" class="btn" disabled>Сохранить PNG</button>
+      </div>
+
+      <div id="columnsContainer" class="columns"></div>
+    </section>
+
+    <section class="plot-area">
+      <div id="plot" class="plot"></div>
+    </section>
+
+    <section class="help">
+      <p>Советы: Safari → <em>Поделиться → На экран «Домой»</em> — иконка приложения будет на рабочем столе.</p>
+      <p>Поддерживаются форматы RomRaider/ECUFlash (колонки: <code>Engine Speed (rpm)</code>, <code>A/F Sensor #1 (AFR)</code>, <code>Mass Airflow (g/s)</code> и т.д.).</p>
+    </section>
+  </main>
+
+  <footer>
+    <small>Сделано для просмотра логов. Добавление новых параметров — легко.</small>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
