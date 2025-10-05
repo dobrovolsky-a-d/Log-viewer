@@ -10,11 +10,13 @@ main{padding:12px}
 .options-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
 .btn{padding:8px 10px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer}
 .btn:disabled{opacity:0.5;cursor:default}
+.btn-small{padding:6px 8px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+.selection-buttons{display:flex;gap:8px;margin-top:12px}
 .columns{margin-top:12px;display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto;padding-right:6px}
 .column-item{display:flex;gap:8px;align-items:center;background:#fff;padding:8px;border-radius:6px;border:1px solid #e6e6e6}
-.column-item label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plot-area{background:#fff;padding:10px;border-radius:8px;min-height:320px;box-shadow:0 1px 2px rgba(0,0,0,0.04)}
-.plot{width:100%;height:420px}
+.column-item label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.plot-area{background:#fff;padding:10px;border-radius:8px;min-height:320px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:12px}
+.plot{width:100%;height:420px;margin-bottom:12px;border:1px solid #e5e7eb;border-radius:6px;padding:8px}
 .help{margin-top:10px;color:#6b7280;font-size:13px}
 footer{padding:8px 12px;text-align:center;color:#9ca3af;font-size:12px}
 @media (max-width:520px){
