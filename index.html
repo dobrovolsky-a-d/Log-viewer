@@ -3,18 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Log Viewer (PWA) — Просмотр логов</title>
-  <meta name="description" content="Просмотр RomRaider/ECUFlash CSV-логов — AFR, RPM, MAF и т.д." />
+  <title>Subaru Log Viewer</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Plotly CDN -->
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <!-- PapaParse CDN for robust CSV parsing -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>Log Viewer</h1>
-    <p class="subtitle">Загружай CSV-лог и выбирай параметры для графиков — прямо в Safari на iPhone</p>
+    <h1>Subaru Log Viewer</h1>
+    <p>Загрузи CSV и смотри графики</p>
   </header>
 
   <main>
@@ -31,29 +28,24 @@
           </select>
         </label>
 
-        <button id="plotBtn" class="btn" disabled>Построить график</button>
+        <button id="plotBtn" class="btn" disabled>Построить графики</button>
         <button id="savePngBtn" class="btn" disabled>Сохранить PNG</button>
+        <button id="selectAllBtn" class="btn" disabled>Выбрать все</button>
+        <button id="deselectAllBtn" class="btn" disabled>Снять все</button>
       </div>
 
-      <div class="selection-buttons">
-        <button id="selectAllBtn" class="btn-small" disabled>Выбрать все</button>
-        <button id="deselectAllBtn" class="btn-small" disabled>Снять все</button>
-      </div>
       <div id="columnsContainer" class="columns"></div>
     </section>
 
-    <section class="plot-area" id="plotsContainer">
-      <!-- Individual plots will be added here dynamically -->
-    </section>
+    <div id="markerData" class="marker-data" style="display:none"></div>
 
-    <section class="help">
-      <p>Советы: Safari → <em>Поделиться → На экран «Домой»</em> — иконка приложения будет на рабочем столе.</p>
-      <p>Поддерживаются форматы RomRaider/ECUFlash (колонки: <code>Engine Speed (rpm)</code>, <code>A/F Sensor #1 (AFR)</code>, <code>Mass Airflow (g/s)</code> и т.д.).</p>
+    <section class="plot-area" id="plotsContainer">
+      <!-- графики вставляются скриптом -->
     </section>
   </main>
 
   <footer>
-    <small>Сделано для просмотра логов. Добавление новых параметров — легко.</small>
+    <small>Subaru Log Viewer ©</small>
   </footer>
 
   <script src="script.js"></script>
