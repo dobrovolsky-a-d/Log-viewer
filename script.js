@@ -1,5 +1,6 @@
-// Subaru Log Viewer — PRO
-// Автопостроение, фиксированная ось X (Time), значения по всем графикам, плавный маркер
+// Subaru Log Viewer — PRO Smooth
+// Плавный маркер, без лагов. Мгновенное обновление на активном графике,
+// синхронное обновление на остальных через лёгкую задержку.
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -14,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let parsed = null;
   let plotMeta = [];
   let markerX = null;
+  let syncTimer = null;
 
   function setStatus(msg, ok = true) {
     status.textContent = msg;
@@ -66,7 +68,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return { fields: header, data };
   }
 
-  // Построение списка параметров
   function buildColumnList(cols) {
     columnsContainer.innerHTML = "";
     cols.forEach((c, idx) => {
@@ -84,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
       item.appendChild(chk);
       item.appendChild(lbl);
       columnsContainer.appendChild(item);
-      chk.addEventListener("change", () => autoBuild());
+      chk.addEventListener("change", () => buildPlots());
     });
   }
 
@@ -101,19 +102,25 @@ document.addEventListener("DOMContentLoaded", () => {
     markerBox.style.display = "block";
   }
 
-  function drawMarker(xVal) {
-    markerX = xVal;
-    plotMeta.forEach(m => {
-      Plotly.relayout(m.div, {
-        shapes: [{
-          type: "line",
-          x0: xVal, x1: xVal,
-          y0: 0, y1: 1,
-          xref: "x", yref: "paper",
-          line: { color: "crimson", width: 1.5 }
-        }]
-      }).catch(() => {});
-    });
+  function drawMarkerOn(div, xVal) {
+    Plotly.relayout(div, {
+      shapes: [{
+        type: "line",
+        x0: xVal, x1: xVal,
+        y0: 0, y1: 1,
+        xref: "x", yref: "paper",
+        line: { color: "crimson", width: 1.5 }
+      }]
+    }).catch(() => {});
+  }
+
+  function syncMarkersLater(xVal, skipDiv) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      plotMeta.forEach(m => {
+        if (m.div !== skipDiv) drawMarkerOn(m.div, xVal);
+      });
+    }, 60);
   }
 
   function syncXRange(range) {
@@ -162,22 +169,28 @@ document.addEventListener("DOMContentLoaded", () => {
         div.on("plotly_hover", ev => {
           const p = ev.points[0];
           if (!p) return;
-          drawMarker(p.x);
+          markerX = p.x;
+          drawMarkerOn(div, markerX);
+          syncMarkersLater(markerX, div);
           updateMarkerBox(p.pointNumber);
         });
+
         div.on("plotly_click", ev => {
           const p = ev.points[0];
           if (!p) return;
-          drawMarker(p.x);
+          markerX = p.x;
+          drawMarkerOn(div, markerX);
+          syncMarkersLater(markerX, div);
           updateMarkerBox(p.pointNumber);
         });
+
         div.on("plotly_relayout", ev => {
           if (ev["xaxis.range[0]"] && ev["xaxis.range[1]"]) {
             syncXRange([ev["xaxis.range[0]"], ev["xaxis.range[1]"]]);
           } else if (ev["xaxis.autorange"]) {
             syncXRange(null);
           }
-          if (markerX !== null) drawMarker(markerX);
+          if (markerX !== null) syncMarkersLater(markerX);
         });
       });
       plotMeta.push({ div, col });
@@ -185,10 +198,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     resetZoomBtn.disabled = false;
     setStatus(`Построено ${plotMeta.length} графиков — ${parsed.data.length} точек`);
-  }
-
-  function autoBuild() {
-    buildPlots();
   }
 
   fileInput.addEventListener("change", e => {
@@ -205,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
         buildColumnList(parsed.fields);
         selectAllBtn.disabled = false;
         deselectAllBtn.disabled = false;
-        autoBuild();
+        buildPlots();
       } catch (err) {
         setStatus("Ошибка парсинга: " + err.message, false);
       }
@@ -222,11 +231,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   selectAllBtn.addEventListener("click", () => {
     columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = true));
-    autoBuild();
+    buildPlots();
   });
 
   deselectAllBtn.addEventListener("click", () => {
     columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = false));
-    autoBuild();
+    buildPlots();
   });
 });
