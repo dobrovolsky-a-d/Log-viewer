@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Subaru Log Viewer</title>
+  <title>Subaru Log Viewer Final</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -11,7 +11,7 @@
 <body>
   <header>
     <h1>Subaru Log Viewer</h1>
-    <p>Загрузи CSV и смотри графики</p>
+    <p>Интерактивный просмотр логов с синхронным маркером</p>
   </header>
 
   <main>
@@ -24,12 +24,12 @@
         <label>Ось X:
           <select id="xSelect">
             <option value="Time">Время (Time)</option>
-            <option value="Engine Speed (rpm)">RPM (Engine Speed)</option>
+            <option value="Engine Speed (rpm)">RPM</option>
           </select>
         </label>
 
-        <button id="plotBtn" class="btn" disabled>Построить графики</button>
-        <button id="savePngBtn" class="btn" disabled>Сохранить PNG</button>
+        <button id="plotBtn" class="btn" disabled>Построить</button>
+        <button id="resetZoomBtn" class="btn" disabled>Сбросить зум</button>
         <button id="selectAllBtn" class="btn" disabled>Выбрать все</button>
         <button id="deselectAllBtn" class="btn" disabled>Снять все</button>
       </div>
@@ -39,13 +39,11 @@
 
     <div id="markerData" class="marker-data" style="display:none"></div>
 
-    <section class="plot-area" id="plotsContainer">
-      <!-- графики вставляются скриптом -->
-    </section>
+    <section id="plotsContainer" class="plot-area"></section>
   </main>
 
   <footer>
-    <small>Subaru Log Viewer ©</small>
+    <small>© Subaru Log Viewer Final</small>
   </footer>
 
   <script src="script.js"></script>
