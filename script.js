@@ -1,4 +1,4 @@
-// Fixed script: uses FileReader, auto-detect delimiter, robust parsing, marker + sync X, fixed Y
+// script.js — optimized: header normalization, injector aliases, fast marker, sync X, fixed Y
 document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('fileInput');
   const xSelect = document.getElementById('xSelect');
@@ -11,162 +11,140 @@ document.addEventListener('DOMContentLoaded', () => {
   const markerBox = document.getElementById('markerData');
   const status = document.getElementById('status');
 
-  let parsed = null; // {fields:[], data:[]}
-  let plotMeta = []; // {div, col, xVals, yVals}
+  let parsed = null;
+  let plotMeta = []; // {div, col, xVals, xNums, yVals}
   let markerX = null;
+  let lastUpdate = 0;
 
-  function setStatus(msg, ok = true){
-    status.textContent = msg;
-    status.style.color = ok ? '#064e3b' : '#b91c1c';
-  }
+  function setStatus(msg, ok=true){ status.textContent = msg; status.style.color = ok ? '#064e3b' : '#b91c1c'; }
 
-  // simple CSV parser: header line + split rows by delimiter, handles quoted fields
-  function parseCSVText(text, delimiter) {
-    const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0);
-    if(lines.length===0) return null;
-    const header = splitLine(lines[0], delimiter);
-    const data = [];
-    for(let i=1;i<lines.length;i++){
-      const vals = splitLine(lines[i], delimiter);
-      if(vals.length === 0) continue;
-      const obj = {};
-      for(let j=0;j<header.length;j++){
-        obj[header[j]] = vals[j] !== undefined ? vals[j] : null;
+  // normalize header: remove BOM, trim, lowercase, remove non-alphanum for matching
+  function normalizeHeader(h){ return String(h || '').replace(/^\uFEFF/,'').trim().toLowerCase().replace(/[\s\-\_():,%]+/g,' '); }
+  function compactKey(h){ return normalizeHeader(h).replace(/[^a-z0-9]/g,''); }
+
+  // known alias groups - map compact key -> display name
+  const aliasGroups = [
+    {names: ['injectordutycycle','injectorduty','injdutyclock','injduty','injectordutycyclepercent','idcpercent','idc'], display:'Injector Duty Cycle (%)'},
+    {names: ['engine speed rpm','enginespeedrpm','rpm','enginespeed'], display:'Engine Speed (rpm)'},
+    {names: ['a/fsensor1(afr)','afsensor1 afr','afr','airfuel','air-fuelratio'], display:'A/F Sensor #1 (AFR)'},
+    {names: ['massairflow','maf','massairflowg/s','mass airflow (g/s)'], display:'Mass Airflow (g/s)'},
+  ];
+
+  function mapHeaderToDisplay(raw){
+    const c = compactKey(raw);
+    for(const g of aliasGroups){
+      for(const n of g.names){
+        if(c.includes(n) || n.includes(c) || c===n) return g.display;
       }
-      data.push(obj);
     }
-    return { fields: header, data: data };
+    // fallback: return trimmed raw header
+    return raw;
   }
 
-  // robust line splitter (handles quoted commas/semicolons)
-  function splitLine(line, delimiter){
-    const res = [];
-    let cur = '';
-    let inQuotes = false;
+  // CSV parsing helpers
+  function detectDelimiter(text){
+    const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0).slice(0,6);
+    let comma=0, semi=0;
+    lines.forEach(l=>{ comma += (l.match(/,/g)||[]).length; semi += (l.match(/;/g)||[]).length; });
+    return semi>comma?';':',';
+  }
+
+  function splitLine(line, delim){
+    const res=[]; let cur=''; let inQ=false;
     for(let i=0;i<line.length;i++){
-      const ch = line[i];
-      if(ch === '"' || ch === '“' || ch === '”'){
-        inQuotes = !inQuotes;
-        continue;
-      }
-      if(!inQuotes && ch === delimiter){
-        res.push(cur);
-        cur='';
-      } else {
-        cur += ch;
-      }
+      const ch=line[i];
+      if(ch === '"'){ inQ = !inQ; continue; }
+      if(!inQ && ch === delim){ res.push(cur); cur=''; } else { cur += ch; }
     }
     res.push(cur);
-    // trim BOM and whitespace on headers/values
     return res.map(s=>s.replace(/^\uFEFF|\u200B/g,'').trim());
   }
 
-  function detectDelimiter(text){
-    // check first 5 non-empty lines
-    const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0).slice(0,5);
-    const commaCounts = lines.map(l=> (l.match(/,/g)||[]).length );
-    const semiCounts = lines.map(l=> (l.match(/;/g)||[]).length );
-    const commaAvg = commaCounts.reduce((a,b)=>a+b,0);
-    const semiAvg = semiCounts.reduce((a,b)=>a+b,0);
-    return semiAvg > commaAvg ? ';' : ',';
+  function parseCSVText(text){
+    const delim = detectDelimiter(text);
+    const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0);
+    if(lines.length<2) return null;
+    const header = splitLine(lines[0], delim);
+    const data = [];
+    for(let i=1;i<lines.length;i++){
+      const vals = splitLine(lines[i], delim);
+      if(vals.length === 0) continue;
+      const obj={};
+      for(let j=0;j<header.length;j++){ obj[ header[j] ] = vals[j] !== undefined ? vals[j] : null; }
+      data.push(obj);
+    }
+    return {fields: header, data: data};
   }
 
-  fileInput.addEventListener('change', (e) => {
+  fileInput.addEventListener('change', e=>{
     const f = e.target.files[0];
-    if(!f) { setStatus('Файл не выбран', false); return; }
+    if(!f){ setStatus('Файл не выбран', false); return; }
     setStatus('Чтение файла...');
-    const rdr = new FileReader();
-    rdr.onload = function(ev){
-      let text = ev.target.result;
-      // try to detect delimiter
-      const delim = detectDelimiter(text);
-      try {
-        const result = parseCSVText(text, delim);
-        if(!result || !result.fields || result.fields.length===0){
-          setStatus('Не удалось распарсить CSV', false);
-          return;
-        }
-        parsed = result;
-        setStatus(`Файл загружен — найдено ${parsed.data.length} строк`);
+    const fr = new FileReader();
+    fr.onload = function(ev){
+      try{
+        const text = ev.target.result;
+        const res = parseCSVText(text);
+        if(!res || !res.fields || res.fields.length===0){ setStatus('Ошибка: не удалось распарсить CSV', false); return; }
+        // attach normalized headers and mapping
+        res._normalized = res.fields.map(h=>({raw:h, norm:normalizeHeader(h), compact:compactKey(h), display:mapHeaderToDisplay(h)}));
+        parsed = res;
+        setStatus(`Файл загружен — ${parsed.data.length} строк, ${parsed.fields.length} колонок`);
         buildColumnList(parsed.fields);
-        plotBtn.disabled = false;
-        selectAllBtn.disabled = false;
-        deselectAllBtn.disabled = false;
-      } catch(err){
-        setStatus('Ошибка парсинга: '+err.message, false);
-      }
+        plotBtn.disabled = false; selectAllBtn.disabled=false; deselectAllBtn.disabled=false;
+      }catch(err){ setStatus('Ошибка парсинга: '+err.message, false); }
     };
-    rdr.onerror = function(){ setStatus('Ошибка чтения файла', false); };
-    rdr.readAsText(f, 'utf-8');
+    fr.onerror = ()=> setStatus('Ошибка чтения файла', false);
+    fr.readAsText(f, 'utf-8');
   });
 
   function buildColumnList(cols){
     columnsContainer.innerHTML='';
     const xKey = xSelect.value;
-    cols.forEach((c, idx) => {
-      if(c === xKey) return;
-      const item = document.createElement('div');
-      item.className = 'column-item';
-      const chk = document.createElement('input');
-      chk.type = 'checkbox';
-      chk.dataset.col = c;
-      chk.id = 'col_' + idx;
-      // default heuristics
-      if(/afr|a\/f|air-fuel|ma[ff]|maf|rpm|engine speed/i.test(c)) chk.checked = true;
-      const lbl = document.createElement('label');
-      lbl.htmlFor = chk.id;
-      lbl.textContent = c;
-      item.appendChild(chk); item.appendChild(lbl);
-      columnsContainer.appendChild(item);
+    // build by normalized headers so display names preferred
+    parsed._normalized.forEach((hObj, idx)=>{
+      const raw = hObj.raw;
+      if(raw === xKey) return;
+      const item = document.createElement('div'); item.className='column-item';
+      const chk = document.createElement('input'); chk.type='checkbox'; chk.dataset.col = raw; chk.id = 'col_'+idx;
+      // default check for common params including injector duty variations
+      const comp = hObj.compact;
+      if(/afr|maf|rpm|injector|inj|idc|duty/.test(comp)) chk.checked = true;
+      const lbl = document.createElement('label'); lbl.htmlFor = chk.id; lbl.textContent = hObj.display || raw;
+      item.appendChild(chk); item.appendChild(lbl); columnsContainer.appendChild(item);
     });
   }
 
-  function drawMarker(xVal){
-    markerX = xVal;
-    plotMeta.forEach(m => {
-      Plotly.relayout(m.div, { shapes: [{ type:'line', x0:xVal, x1:xVal, y0:0, y1:1, xref:'x', yref:'paper', line:{color:'crimson', width:1.5} }] }).catch(()=>{});
-    });
+  // debounce helper for marker updates
+  function debounce(fn, wait){
+    let t = null;
+    return function(...args){ if(t) clearTimeout(t); t = setTimeout(()=>{ fn.apply(this,args); t=null; }, wait); };
   }
 
-  function updateMarkerBox(index){
+  function drawMarkerOnDiv(div, xVal){
+    return Plotly.relayout(div, { shapes: [{ type:'line', x0:xVal, x1:xVal, y0:0, y1:1, xref:'x', yref:'paper', line:{color:'crimson', width:1.5} }] }).catch(()=>{});
+  }
+
+  // fast update: draw marker on the div where event occurred, and schedule lightweight update for others
+  const lightSync = debounce((xVal)=>{
+    plotMeta.forEach(m=>{ try{ drawMarkerOnDiv(m.div, xVal); } catch(e){} });
+  }, 60);
+
+  function updateMarkerBoxFast(index){
     if(!parsed || !parsed.data[index]) return;
     const row = parsed.data[index];
+    // update only text nodes inside markerBox for speed
     let html = `<div class="marker-title">Позиция: ${index}</div><div class="marker-list">`;
     plotMeta.forEach(m=>{
       const v = row[m.col];
-      html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${v !== undefined ? v : '-'}</span></div>`;
+      html += `<div class="marker-row"><span class="marker-key">${m.display||m.col}</span><span class="marker-val">${v!==undefined?v:'-'}</span></div>`;
     });
     html += '</div>';
-    markerBox.innerHTML = html;
-    markerBox.style.display = 'block';
+    markerBox.innerHTML = html; markerBox.style.display = 'block';
   }
 
   function syncXRange(range){
-    plotMeta.forEach(m => {
-      Plotly.relayout(m.div, {'xaxis.range': range}).catch(()=>{});
-    });
-  }
-
-  function findNearestIndexForPlot(m, xVal){
-    // try numeric compare
-    const xNums = m.xValsNumeric;
-    if(xNums && xNums.some(v=>v!==null)){
-      // if xVal numeric, choose nearest
-      const n = parseFloat(String(xVal).replace(',','.'));
-      if(!isNaN(n)){
-        let best=0, bestd=Infinity;
-        for(let i=0;i<xNums.length;i++){
-          const v = xNums[i];
-          if(v===null) continue;
-          const d = Math.abs(v-n);
-          if(d<bestd){bestd=d;best=i;}
-        }
-        return best;
-      }
-    }
-    // fallback: find exact match by string
-    const idx = m.xVals.findIndex(v=>v===xVal);
-    return idx!==-1?idx:0;
+    plotMeta.forEach(m=>{ Plotly.relayout(m.div, {'xaxis.range': range}).catch(()=>{}); });
   }
 
   function buildPlots(){
@@ -175,95 +153,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const checked = [...columnsContainer.querySelectorAll('input[type=checkbox]:checked')].map(i=>i.dataset.col);
     if(checked.length===0){ setStatus('Выберите параметры', false); return; }
     plotsContainer.innerHTML=''; plotMeta=[];
-    // prepare x array and numeric version
-    const xVals = parsed.data.map(r=> r[xKey] !== undefined ? r[xKey] : null );
-    const xValsNumeric = xVals.map(v=>{ const n=parseFloat(String(v).replace(',','.')); return isNaN(n)?null:n; });
+    // prepare x values and numeric conversions
+    const xVals = parsed.data.map(r => r[xKey] !== undefined ? r[xKey] : null);
+    const xNums = xVals.map(v=>{ const n=parseFloat(String(v).replace(',','.')); return isNaN(n)?null:n; });
     checked.forEach((col, idx)=>{
-      const y = parsed.data.map(r=>{
-        const v = r[col];
-        if(typeof v === 'string') {
-          const s = v.replace(',','.');
-          const n = parseFloat(s);
-          return isNaN(n)?null:n;
-        }
-        return v;
-      });
-      const div = document.createElement('div');
-      div.className = 'plot'; div.id = 'plot_'+idx; plotsContainer.appendChild(div);
-      const trace = { x: xVals, y: y, mode:'lines', name:col };
-      const layout = { title:col, dragmode:'pan', yaxis:{fixedrange:true}, xaxis:{title:xKey}, margin:{t:40,b:40,l:50,r:10} };
+      const y = parsed.data.map(r=>{ const v = r[col]; if(typeof v === 'string'){ const s=v.replace(',','.'); const n=parseFloat(s); return isNaN(n)?null:n; } return v; });
+      const div = document.createElement('div'); div.className='plot'; div.id='plot_'+idx; plotsContainer.appendChild(div);
+      const trace = { x:xVals, y:y, mode:'lines', name: (parsed._normalized.find(h=>h.raw===col)||{display:col}).display || col };
+      const layout = { title:trace.name, dragmode:'pan', yaxis:{fixedrange:true}, xaxis:{title:xKey}, margin:{t:40,b:40,l:50,r:10} };
       Plotly.newPlot(div, [trace], layout, {displaylogo:false,responsive:true}).then(()=>{
-        // attach handlers for hover/click to move marker
-        div.on('plotly_hover', ev => {
+        div.on('plotly_hover', ev=>{
           const p = ev.points[0];
-          // find nearest index for each plot using the first plot's pointNumber
-          const index = p.pointNumber;
-          drawMarker(p.x);
-          updateMarkerBox(index);
+          if(!p) return;
+          // draw marker on target div immediately
+          drawMarkerOnDiv(div, p.x);
+          // fast update marker box with this index
+          updateMarkerBoxFast(p.pointNumber);
+          // schedule light sync to draw on other plots (debounced)
+          lightSync(p.x);
         });
-        div.on('plotly_click', ev => {
+        div.on('plotly_click', ev=>{
           const p = ev.points[0];
-          const index = p.pointNumber;
-          drawMarker(p.x);
-          updateMarkerBox(index);
+          if(!p) return;
+          drawMarkerOnDiv(div, p.x); updateMarkerBoxFast(p.pointNumber); lightSync(p.x);
         });
-        div.on('plotly_relayout', ev => {
-          if(ev['xaxis.range[0]'] !== undefined && ev['xaxis.range[1]'] !== undefined){
-            syncXRange([ev['xaxis.range[0]'], ev['xaxis.range[1]']]);
-          } else if(ev['xaxis.autorange'] !== undefined){
-            syncXRange(null);
-          }
-          if(markerX !== null) drawMarker(markerX);
+        div.on('plotly_relayout', ev=>{
+          if(ev['xaxis.range[0]'] !== undefined && ev['xaxis.range[1]'] !== undefined) syncXRange([ev['xaxis.range[0]'], ev['xaxis.range[1]']]);
+          else if(ev['xaxis.autorange'] !== undefined) syncXRange(null);
+          if(markerX !== null) lightSync(markerX);
         });
       }).catch(()=>{});
-      plotMeta.push({div:div, col:col, xVals:xVals, xValsNumeric:xValsNumeric, yVals:y});
+      // store meta using raw col name and display
+      const display = (parsed._normalized.find(h=>h.raw===col)||{display:col}).display || col;
+      plotMeta.push({div:div, col:col, display:display, xVals:xVals, xNums:xNums, yVals:y});
     });
-    resetZoomBtn.disabled = false;
+    resetZoomBtn.disabled=false;
     setStatus(`Построено ${plotMeta.length} графиков — ${parsed.data.length} точек`);
   }
 
   fileInput.addEventListener('change', e=>{
+    // allow reselecting same file name by clearing input
+    e.target.value = '';
     const f = e.target.files[0];
     if(!f){ setStatus('Файл не выбран', false); return; }
     setStatus('Чтение файла...');
     const fr = new FileReader();
-    fr.onload = function(evt){
-      const text = evt.target.result;
+    fr.onload = function(ev){
       try{
-        const delim = detectDelimiter(text);
-        const res = parseCSVText(text, delim);
-        if(!res || !res.fields || res.fields.length===0) { setStatus('Не удалось распарсить CSV', false); return; }
+        const res = parseCSVText(ev.target.result);
+        if(!res || !res.fields || res.fields.length===0) { setStatus('Ошибка парсинга', false); return; }
+        res._normalized = res.fields.map(h=>({raw:h, norm:normalizeHeader(h), compact:compactKey(h), display:mapHeaderToDisplay(h)}));
         parsed = res;
-        // prepare numeric conversions for x columns for each row
         setStatus(`Файл загружен — ${parsed.data.length} строк`);
         buildColumnList(parsed.fields);
-        plotBtn.disabled = false;
-        selectAllBtn.disabled = false;
-        deselectAllBtn.disabled = false;
-      }catch(err){
-        setStatus('Ошибка парсинга: '+err.message, false);
-      }
+        plotBtn.disabled=false; selectAllBtn.disabled=false; deselectAllBtn.disabled=false;
+      }catch(err){ setStatus('Ошибка: '+err.message, false); }
     };
-    fr.onerror = function(){ setStatus('Ошибка чтения файла', false); };
+    fr.onerror = ()=> setStatus('Ошибка чтения файла', false);
     fr.readAsText(f, 'utf-8');
   });
 
   plotBtn.addEventListener('click', buildPlots);
   resetZoomBtn.addEventListener('click', ()=>{
     plotMeta.forEach(m=>{ Plotly.relayout(m.div, {'xaxis.autorange':true}).catch(()=>{}); });
-    markerX = null; markerBox.style.display = 'none'; setStatus('Зум сброшен');
+    markerBox.style.display='none'; markerX = null; setStatus('Зум сброшен');
   });
   selectAllBtn.addEventListener('click', ()=>{ columnsContainer.querySelectorAll('input').forEach(cb=>cb.checked=true); });
   deselectAllBtn.addEventListener('click', ()=>{ columnsContainer.querySelectorAll('input').forEach(cb=>cb.checked=false); });
 
-  // helper: detect delimiter quickly
-  function detectDelimiter(text){
-    const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0).slice(0,5);
-    let comma=0, semi=0;
-    lines.forEach(l=>{ comma += (l.match(/,/g)||[]).length; semi += (l.match(/;/g)||[]).length; });
-    return semi>comma?';':',';
-  }
-
-  // expose for debug if needed
-  window._sv = { detectDelimiter, parseCSVText };
+  // expose helpers for debug
+  window._sv = { mapHeaderToDisplay: window.mapHeaderToDisplay, detectDelimiter: detectDelimiter };
 });
