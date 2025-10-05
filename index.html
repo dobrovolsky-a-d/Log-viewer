@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Subaru Log Viewer — Fast</title>
+  <title>Subaru Log Viewer — PRO</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
+
 <body>
   <header>
-    <h1>Subaru Log Viewer</h1>
-    <p>Финальная версия — нормализация заголовков и быстрый маркер</p>
+    <h1>Subaru Log Viewer — PRO</h1>
+    <p>Автоматическое построение графиков | Закреплённые значения | Быстрая работа</p>
   </header>
 
   <main>
@@ -20,14 +21,6 @@
       </label>
 
       <div class="options-row">
-        <label>Ось X:
-          <select id="xSelect">
-            <option value="Time">Время (Time)</option>
-            <option value="Engine Speed (rpm)">RPM</option>
-          </select>
-        </label>
-
-        <button id="plotBtn" class="btn" disabled>Построить</button>
         <button id="resetZoomBtn" class="btn" disabled>Сбросить зум</button>
         <button id="selectAllBtn" class="btn" disabled>Выбрать все</button>
         <button id="deselectAllBtn" class="btn" disabled>Снять все</button>
@@ -43,7 +36,7 @@
   </main>
 
   <footer>
-    <small>© Subaru Log Viewer — Fast</small>
+    <small>© Subaru Log Viewer — PRO</small>
   </footer>
 
   <script src="script.js"></script>
