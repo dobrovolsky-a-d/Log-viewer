@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const plotBtn = document.getElementById('plotBtn');
   const savePngBtn = document.getElementById('savePngBtn');
   const xSelect = document.getElementById('xSelect');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const deselectAllBtn = document.getElementById('deselectAllBtn');
+  const plotsContainer = document.getElementById('plotsContainer');
   let parsed = null;
   let headers = [];
   let dataRows = [];
@@ -33,16 +36,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         buildColumnList(headers);
         plotBtn.disabled = false;
         savePngBtn.disabled = true;
-        // try to set X axis if RPM found
-        const g = guessDefaults(headers);
-        if(g.rpmKey){
-          xSelect.value = g.rpmKey;
-          // add RPM to options if custom header exists
-          ensureXOption(g.rpmKey);
-        } else {
-          // keep default Time
-          ensureXOption('Time');
-        }
+        selectAllBtn.disabled = false;
+        deselectAllBtn.disabled = false;
+        // keep default Time as X axis
+        xSelect.value = 'Time';
+        ensureXOption('Time');
       },
       error: function(err){
         alert('Ошибка чтения CSV: '+err.message);
@@ -61,7 +59,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   function buildColumnList(cols){
     columnsContainer.innerHTML = '';
+    const xKey = xSelect.value;
     cols.forEach(c => {
+      // Skip if this column is selected as X axis
+      if(c === xKey) return;
+
       const item = document.createElement('div');
       item.className = 'column-item';
       const checkbox = document.createElement('input');
@@ -90,6 +92,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const checked = [...columnsContainer.querySelectorAll('input[type=checkbox]:checked')].map(i=>i.dataset.col);
     if(checked.length===0){ alert('Выберите хотя бы один параметр'); return; }
 
+    // Clear previous plots
+    plotsContainer.innerHTML = '';
+
     // Prepare X values
     let xVals = [];
     if(xKey === 'Time' && parsed.meta && parsed.data){
@@ -104,10 +109,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
       xVals = parsed.data.map(r => r[xKey]);
     }
 
-    const traces = [];
-    checked.forEach(col => {
+    // Array to store all plot divs for synchronization
+    const plotDivs = [];
+
+    // Create individual plot for each checked column
+    checked.forEach((col, index) => {
       // skip if equals X
       if(col === xKey) return;
+
       const y = parsed.data.map(r => {
         const v = r[col];
         // try to coerce numeric-like values that are strings with commas
@@ -118,7 +127,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         return v;
       });
-      traces.push({
+
+      // Create a div for this plot
+      const plotDiv = document.createElement('div');
+      plotDiv.className = 'plot';
+      plotDiv.id = 'plot_' + index;
+      plotsContainer.appendChild(plotDiv);
+      plotDivs.push(plotDiv);
+
+      const trace = {
         x: xVals,
         y: y,
         name: col,
@@ -126,33 +143,55 @@ document.addEventListener('DOMContentLoaded', ()=>{
         marker: {size:4},
         hovertemplate: '<b>%{text}</b><br>X: %{x}<br>Y: %{y}<extra></extra>',
         text: Array(y.length).fill(col)
+      };
+
+      const layout = {
+        title: col,
+        xaxis: {title: xKey, automargin:true},
+        yaxis: {title: col, automargin:true},
+        margin: {t:50, b:60, l:60, r:20}
+      };
+
+      Plotly.newPlot(plotDiv.id, [trace], layout, {responsive:true});
+    });
+
+    // Synchronize zoom and pan across all plots
+    plotDivs.forEach((mainDiv, mainIndex) => {
+      mainDiv.on('plotly_relayout', function(eventData) {
+        // Check if this is a zoom/pan event
+        if(eventData['xaxis.range[0]'] !== undefined || eventData['xaxis.autorange'] !== undefined) {
+          plotDivs.forEach((targetDiv, targetIndex) => {
+            if(targetIndex !== mainIndex) {
+              Plotly.relayout(targetDiv, {
+                'xaxis.range': eventData['xaxis.range[0]'] !== undefined
+                  ? [eventData['xaxis.range[0]'], eventData['xaxis.range[1]']]
+                  : undefined,
+                'xaxis.autorange': eventData['xaxis.autorange']
+              });
+            }
+          });
+        }
       });
     });
 
-    const layout = {
-      title: 'График: ' + checked.join(', '),
-      xaxis: {title: xKey, automargin:true},
-      yaxis: {title: 'Значение', automargin:true},
-      legend: {orientation:'h'},
-      margin: {t:50, b:60, l:60, r:20}
-    };
-
-    Plotly.newPlot('plot', traces, layout, {responsive:true});
     savePngBtn.disabled = false;
   }
 
   plotBtn.addEventListener('click', buildPlot);
 
-  savePngBtn.addEventListener('click', ()=>{
-    Plotly.toImage('plot', {format:'png', height:720, width:1280}).then(function(dataUrl){
-      // create temporary link to download
+  savePngBtn.addEventListener('click', async ()=>{
+    const plots = plotsContainer.querySelectorAll('.plot');
+    for(let i = 0; i < plots.length; i++){
+      const dataUrl = await Plotly.toImage(plots[i], {format:'png', height:720, width:1280});
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = 'log_plot.png';
+      a.download = `log_plot_${i+1}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-    });
+      // small delay between downloads
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   });
 
   // allow clicking on column label to toggle selection
@@ -163,6 +202,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const inp = document.getElementById(id);
       if(inp) inp.checked = !inp.checked;
     }
+  });
+
+  // Rebuild column list when X axis changes
+  xSelect.addEventListener('change', ()=>{
+    if(headers.length > 0){
+      buildColumnList(headers);
+    }
+  });
+
+  // Select all checkboxes
+  selectAllBtn.addEventListener('click', ()=>{
+    const checkboxes = columnsContainer.querySelectorAll('input[type=checkbox]');
+    checkboxes.forEach(cb => cb.checked = true);
+  });
+
+  // Deselect all checkboxes
+  deselectAllBtn.addEventListener('click', ()=>{
+    const checkboxes = columnsContainer.querySelectorAll('input[type=checkbox]');
+    checkboxes.forEach(cb => cb.checked = false);
   });
 
 });

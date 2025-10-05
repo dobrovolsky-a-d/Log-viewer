@@ -35,11 +35,15 @@
         <button id="savePngBtn" class="btn" disabled>Сохранить PNG</button>
       </div>
 
+      <div class="selection-buttons">
+        <button id="selectAllBtn" class="btn-small" disabled>Выбрать все</button>
+        <button id="deselectAllBtn" class="btn-small" disabled>Снять все</button>
+      </div>
       <div id="columnsContainer" class="columns"></div>
     </section>
 
-    <section class="plot-area">
-      <div id="plot" class="plot"></div>
+    <section class="plot-area" id="plotsContainer">
+      <!-- Individual plots will be added here dynamically -->
     </section>
 
     <section class="help">
