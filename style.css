@@ -1,167 +1,64 @@
-/* Subaru Log Viewer — PRO version styles */
+/* PRO 1.0 styles — минималистичный, современный и лёгкий */
 
-* {
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+:root{
+  --bg:#f7f9fc;
+  --card:#ffffff;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --danger:#ef4444;
+  --text:#0f172a;
+  --card-shadow: 0 6px 20px rgba(12,23,36,0.06);
 }
 
-body {
-  margin: 0;
-  background: #f3f4f6;
-  color: #111;
+*{box-sizing:border-box;font-family:Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased;
 }
 
-header {
-  background: #fff;
-  padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
+.header{background:transparent;padding:20px 16px 6px}
+.header-inner{max-width:980px;margin:0 auto}
+.title{font-size:20px;font-weight:600}
+.title .muted{font-weight:500;color:var(--muted);font-size:14px;margin-left:6px}
+.subtitle{color:var(--muted);font-size:13px;margin-top:6px}
 
-h1 {
-  margin: 0;
-  font-size: 18px;
-}
+main{max-width:980px;margin:14px auto;padding:0 12px}
 
-main {
-  padding: 12px;
-}
+.card{background:var(--card);border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:var(--card-shadow)}
 
-/* Панель управления */
-.controls {
-  background: #fff;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-}
+.controls .top-row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.file-label{display:inline-block;padding:8px 12px;background:#eef2ff;border-radius:8px;cursor:pointer;color:var(--accent)}
+.file-label input{display:none}
 
-.file-label {
-  display: inline-block;
-  padding: 8px 10px;
-  background: #eef2ff;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 8px;
-}
+.action-buttons{display:flex;gap:8px}
+.btn{background:var(--accent);color:#fff;padding:8px 10px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
+.btn:disabled{opacity:0.5;cursor:default}
 
-.file-label input {
-  display: none;
-}
+.status{margin-top:10px;color:var(--muted);font-size:13px}
 
-.options-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
+.columns{margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:6px}
+.column-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;border:1px solid #eef2ff;background:linear-gradient(180deg,#fff,#fcfdff)}
 
-.btn {
-  padding: 8px 10px;
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
+.plots{padding:10px}
+.marker-data{
+  position:sticky;top:14px;z-index:120;display:block;margin-bottom:14px;background:#0b1220;color:#fff;padding:12px;border-radius:10px;box-shadow:0 8px 26px rgba(2,6,23,0.24);
 }
+.marker-title{font-weight:700;margin-bottom:6px}
+.marker-list{display:flex;flex-direction:column;gap:6px}
+.marker-row{display:flex;justify-content:space-between;gap:10px}
+.marker-key{color:#9aa6b8}
+.marker-val{font-weight:700}
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+.plots-container{display:flex;flex-direction:column;gap:20px}
+.plot{width:100%;height:420px;border-radius:8px;overflow:hidden;border:1px solid #f0f4f8;background:#fff}
 
-.status {
-  margin-top: 8px;
-  color: #374151;
-  font-size: 13px;
-}
+/* thin slider row */
+.slider-row{display:flex;align-items:center;padding:8px 6px;margin-top:8px}
+#hSlider{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;background:#e6eefc;outline:none}
+#hSlider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 2px 6px rgba(37,99,235,0.35)}
 
-.columns {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 220px;
-  overflow: auto;
-  padding-right: 6px;
-}
-
-.column-item {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  background: #fff;
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #e6e6e6;
-}
-
-/* Область графиков */
-.plot-area {
-  background: #fff;
-  padding: 10px;
-  border-radius: 8px;
-  min-height: 320px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-}
-
-.plot {
-  width: 100%;
-  height: 420px;
-  margin-bottom: 20px;
-}
-
-/* Панель текущих значений (закреплённая) */
-.marker-data {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: #111827;
-  color: #fff;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-  font-size: 13px;
-  transition: background 0.2s ease;
-}
-
-.marker-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.marker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.marker-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.marker-key {
-  color: #cbd5e1;
-}
-
-.marker-val {
-  font-weight: 600;
-  color: #fff;
-}
-
-footer {
-  text-align: center;
-  color: #9ca3af;
-  font-size: 12px;
-  padding: 10px;
-}
-
-@media(max-width:520px) {
-  .marker-data {
-    font-size: 12px;
-    padding: 8px;
-  }
+.footer{text-align:center;color:var(--muted);font-size:13px;padding:16px}
+@media(max-width:520px){
+  .plot{height:380px}
+  .marker-data{font-size:13px;padding:10px}
 }
