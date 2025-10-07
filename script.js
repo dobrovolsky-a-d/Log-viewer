@@ -1,4 +1,4 @@
-// Subaru Log Viewer — PRO (версия стабильная, ось X = время как вчера)
+// Subaru Log Viewer — PRO 1.3 (ось X = Time без преобразований)
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -55,12 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // найти столбец времени
     const timeKey = head.find(h => /time|timestamp|utc/i.test(h)) || head[0];
-
-    // добавить __sec — округлённые секунды
-    data.forEach((r, i) => {
-      const raw = parseFloat((r[timeKey] || "").replace(",", "."));
-      r.__sec = isFinite(raw) ? Math.round(raw) : i;
-    });
+    data.forEach(r => r.__time = r[timeKey] ?? "");
 
     return { fields: head, data };
   };
@@ -85,19 +80,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  const clamp = (a, b, min, max) => {
-    let s = a, e = b;
-    const w = e - s;
-    if (w <= 0) return [min, max];
-    if (s < min) { s = min; e = s + w; }
-    if (e > max) { e = max; s = e - w; }
-    return [s, e];
-  };
-
   const updateMarkerBox = (i) => {
     const row = parsed?.data[i];
     if (!row) return;
-    let html = `<div class="marker-title">Время: ${row.__sec} с</div><div class="marker-list">`;
+    let html = `<div class="marker-title">Время: ${row.__time}</div><div class="marker-list">`;
     plotMeta.forEach(m => html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${row[m.col] ?? "-"}</span></div>`);
     markerBox.innerHTML = html + "</div>";
     markerBox.style.display = "block";
@@ -112,30 +98,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 30);
   };
 
-  const applyRange = (r) => plotMeta.forEach(m => Plotly.relayout(m.div, { "xaxis.range": r }));
-
-  hSlider.addEventListener("input", () => {
-    if (!plotMeta.length) return;
-    const m = plotMeta[0];
-    const { xMin, xMax } = m;
-    const pct = +hSlider.value / 100;
-    const w = (m.range ? m.range[1] - m.range[0] : (xMax - xMin) / 5);
-    const center = xMin + pct * (xMax - xMin);
-    const [s, e] = clamp(center - w / 2, center + w / 2, xMin, xMax);
-    applyRange([s, e]);
-    plotMeta.forEach(p => p.range = [s, e]);
-  });
-
   const buildPlots = () => {
     if (!parsed) return;
-    const xKey = "__sec";
+    const xKey = "__time";
     const selected = [...columnsContainer.querySelectorAll("input:checked")].map(x => x.dataset.col);
     if (!selected.length) { plotsContainer.innerHTML = ""; plotMeta = []; return; }
 
     plotsContainer.innerHTML = "";
     plotMeta = [];
     const x = parsed.data.map(r => r[xKey]);
-    const xMin = Math.min(...x), xMax = Math.max(...x);
+    const xCount = x.length;
 
     const builds = selected.map(col => {
       const y = parsed.data.map(r => {
@@ -148,35 +120,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const trace = { x, y, mode: "lines", name: col, line: { width: 2.5 } };
       const layout = {
         title: col,
-        xaxis: { title: "секунды", tickformat: "d" },
+        xaxis: { title: "Время", type: "category" },
         yaxis: { fixedrange: true },
         margin: { t: 38, l: 50, r: 10, b: 40 }
       };
       return Plotly.newPlot(div, [trace], layout, CONFIG).then(() => {
-        const meta = { div, col, xMin, xMax, range: [xMin, xMin + (xMax - xMin) / 5] };
+        const meta = { div, col, xCount };
         plotMeta.push(meta);
         div.querySelector(".main-svg").style.touchAction = "none";
         div.on("plotly_click", ev => {
           const p = ev.points?.[0]; if (!p) return;
           markerX = p.x; updateMarkerBox(p.pointNumber); drawMarkersAll(markerX);
         });
-        div.on("plotly_relayout", ev => {
-          if (ev["xaxis.range[0]"] !== undefined && ev["xaxis.range[1]"] !== undefined) {
-            let r0 = ev["xaxis.range[0]"], r1 = ev["xaxis.range[1]"];
-            const [s, e] = clamp(r0, r1, meta.xMin, meta.xMax);
-            if (e - s < 0.001) return;
-            applyRange([s, e]);
-            plotMeta.forEach(p => p.range = [s, e]);
-          } else if (ev["xaxis.autorange"] !== undefined) {
-            applyRange([meta.xMin, meta.xMax]);
-            plotMeta.forEach(p => p.range = [meta.xMin, meta.xMax]);
-          }
-        });
       });
     });
 
     Promise.all(builds).then(() => {
-      resetZoomBtn.disabled = false;
       setStatus(`Построено ${plotMeta.length} графиков — ${parsed.data.length} точек`);
     });
   };
@@ -191,21 +150,11 @@ document.addEventListener("DOMContentLoaded", () => {
         parsed = parseCSV(ev.target.result);
         setStatus(`Файл загружен — ${parsed.data.length} строк`);
         buildColumnList(parsed.fields);
-        selectAllBtn.disabled = deselectAllBtn.disabled = false;
         buildPlots();
+        selectAllBtn.disabled = deselectAllBtn.disabled = false;
       } catch (err) { setStatus("Ошибка: " + err.message, false); }
     };
-    fr.onerror = () => setStatus("Ошибка чтения", false);
     fr.readAsText(f, "utf-8");
-  });
-
-  resetZoomBtn.addEventListener("click", () => {
-    if (!plotMeta.length) return;
-    const { xMin, xMax } = plotMeta[0];
-    const r = [xMin, xMin + (xMax - xMin) / 5];
-    applyRange(r);
-    plotMeta.forEach(p => p.range = r);
-    markerBox.style.display = "none";
   });
 
   selectAllBtn.addEventListener("click", () => {
