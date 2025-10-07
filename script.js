@@ -1,4 +1,5 @@
-// Subaru Log Viewer — PRO 1.3 (ось X = Time без преобразований)
+// Subaru Log Viewer — PRO Smooth 3.1
+// Упрощённая стабильная версия: ось X = Time из CSV, без парсинга и преобразований.
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -9,7 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const plotsContainer = document.getElementById("plotsContainer");
   const markerBox = document.getElementById("markerData");
   const status = document.getElementById("status");
-  const hSlider = document.getElementById("hSlider");
 
   let parsed = null;
   let plotMeta = [];
@@ -31,7 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const splitLine = (line, d) => {
-    const res = []; let cur = "", inQ = false;
+    const res = [];
+    let cur = "", inQ = false;
     for (let ch of line) {
       if (ch === '"') { inQ = !inQ; continue; }
       if (!inQ && ch === d) { res.push(cur); cur = ""; } else cur += ch;
@@ -40,22 +41,23 @@ document.addEventListener("DOMContentLoaded", () => {
     return res.map(v => v.replace(/^\uFEFF|\u200B/g, "").trim());
   };
 
-  // простой парсер CSV
+  // Простой CSV парсер
   const parseCSV = (txt) => {
     const d = detectDelimiter(txt);
     const lines = txt.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) throw new Error("Файл пуст");
+    if (lines.length < 2) throw new Error("Файл пуст или повреждён");
+
     const head = splitLine(lines[0], d);
     const data = lines.slice(1).map(l => {
       const vals = splitLine(l, d);
       const obj = {};
-      head.forEach((h, i) => obj[h] = vals[i] ?? null);
+      head.forEach((h, i) => obj[h] = vals[i] ?? "");
       return obj;
     });
 
-    // найти столбец времени
+    // Найдём Time-столбец
     const timeKey = head.find(h => /time|timestamp|utc/i.test(h)) || head[0];
-    data.forEach(r => r.__time = r[timeKey] ?? "");
+    data.forEach(r => (r.__time = r[timeKey] || ""));
 
     return { fields: head, data };
   };
@@ -93,9 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       plotMeta.forEach(m => Plotly.relayout(m.div, {
-        shapes: [{ type: "line", x0: x, x1: x, y0: 0, y1: 1, xref: "x", yref: "paper", line: { color: "#ef4444", width: 1.5 } }]
+        shapes: [{
+          type: "line", x0: x, x1: x, y0: 0, y1: 1,
+          xref: "x", yref: "paper", line: { color: "#ef4444", width: 1.5 }
+        }]
       }));
-    }, 30);
+    }, 25);
   };
 
   const buildPlots = () => {
@@ -107,39 +112,50 @@ document.addEventListener("DOMContentLoaded", () => {
     plotsContainer.innerHTML = "";
     plotMeta = [];
     const x = parsed.data.map(r => r[xKey]);
-    const xCount = x.length;
 
     const builds = selected.map(col => {
       const y = parsed.data.map(r => {
         const n = parseFloat((r[col] ?? "").replace(",", "."));
         return isNaN(n) ? null : n;
       });
+
       const div = document.createElement("div");
       div.className = "plot";
       plotsContainer.append(div);
-      const trace = { x, y, mode: "lines", name: col, line: { width: 2.5 } };
+
+      const trace = { x, y, mode: "lines", name: col, line: { width: 2.2 } };
       const layout = {
         title: col,
         xaxis: { title: "Время", type: "category" },
         yaxis: { fixedrange: true },
         margin: { t: 38, l: 50, r: 10, b: 40 }
       };
+
       return Plotly.newPlot(div, [trace], layout, CONFIG).then(() => {
-        const meta = { div, col, xCount };
+        const meta = { div, col };
         plotMeta.push(meta);
+
+        // Ставим touchAction none, чтобы не зумило одним пальцем
         div.querySelector(".main-svg").style.touchAction = "none";
+
+        // Обработчик кликов
         div.on("plotly_click", ev => {
-          const p = ev.points?.[0]; if (!p) return;
-          markerX = p.x; updateMarkerBox(p.pointNumber); drawMarkersAll(markerX);
+          const p = ev.points?.[0];
+          if (!p) return;
+          markerX = p.x;
+          updateMarkerBox(p.pointNumber);
+          drawMarkersAll(markerX);
         });
       });
     });
 
     Promise.all(builds).then(() => {
       setStatus(`Построено ${plotMeta.length} графиков — ${parsed.data.length} точек`);
+      resetZoomBtn.disabled = false;
     });
   };
 
+  // === File Upload ===
   fileInput.addEventListener("change", e => {
     const f = e.target.files[0];
     if (!f) return;
@@ -150,11 +166,20 @@ document.addEventListener("DOMContentLoaded", () => {
         parsed = parseCSV(ev.target.result);
         setStatus(`Файл загружен — ${parsed.data.length} строк`);
         buildColumnList(parsed.fields);
-        buildPlots();
         selectAllBtn.disabled = deselectAllBtn.disabled = false;
-      } catch (err) { setStatus("Ошибка: " + err.message, false); }
+        buildPlots();
+      } catch (err) {
+        setStatus("Ошибка: " + err.message, false);
+      }
     };
     fr.readAsText(f, "utf-8");
+  });
+
+  // === Buttons ===
+  resetZoomBtn.addEventListener("click", () => {
+    if (!plotMeta.length) return;
+    markerBox.style.display = "none";
+    plotMeta.forEach(m => Plotly.relayout(m.div, { "xaxis.autorange": true }));
   });
 
   selectAllBtn.addEventListener("click", () => {
