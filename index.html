@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Subaru Log Viewer — PRO 1.0</title>
+  <title>Subaru Log Viewer — PRO 1.1</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
@@ -11,8 +11,8 @@
 <body>
   <header class="header">
     <div class="header-inner">
-      <div class="title">Subaru Log Viewer — <span class="muted">PRO 1.0</span></div>
-      <div class="subtitle">Стабильная версия — показывай с гордостью</div>
+      <div class="title">Subaru Log Viewer — <span class="muted">PRO 1.1</span></div>
+      <div class="subtitle">Стабильная версия с улучшенным управлением графиками</div>
     </div>
   </header>
 
@@ -31,23 +31,22 @@
       </div>
 
       <div id="status" class="status">Файл не загружен</div>
-
-      <div id="columnsContainer" class="columns" aria-label="Список параметров"></div>
+      <div id="columnsContainer" class="columns"></div>
     </section>
 
     <section class="plots card">
-      <div id="markerData" class="marker-data" aria-live="polite" style="display:none"></div>
-
+      <div id="markerData" class="marker-data" style="display:none"></div>
       <div id="plotsContainer" class="plots-container"></div>
-
-      <div class="slider-row">
-        <input id="hSlider" type="range" min="0" max="100" value="0" step="0.1">
-      </div>
     </section>
   </main>
 
+  <!-- закреплённый общий ползунок -->
+  <div class="global-slider">
+    <input id="hSlider" type="range" min="0" max="100" value="0" step="0.1">
+  </div>
+
   <footer class="footer">
-    <small>© Subaru Log Viewer — PRO 1.0</small>
+    <small>© Subaru Log Viewer — PRO 1.1</small>
   </footer>
 
   <script src="script.js"></script>
