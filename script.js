@@ -1,5 +1,5 @@
-// Subaru Log Viewer — PRO Smooth 3.1
-// Упрощённая стабильная версия: ось X = Time из CSV, без парсинга и преобразований.
+// Subaru Log Viewer — PRO Lite 1.0
+// Основано на Smooth 3.1: стабильность + синхронное движение всех графиков по оси X
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -135,16 +135,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const meta = { div, col };
         plotMeta.push(meta);
 
-        // Ставим touchAction none, чтобы не зумило одним пальцем
         div.querySelector(".main-svg").style.touchAction = "none";
 
-        // Обработчик кликов
+        // Ставим обработчик кликов (красная линия)
         div.on("plotly_click", ev => {
           const p = ev.points?.[0];
           if (!p) return;
           markerX = p.x;
           updateMarkerBox(p.pointNumber);
           drawMarkersAll(markerX);
+        });
+
+        // 🔄 Новый обработчик — синхронное движение всех графиков
+        div.on("plotly_relayout", ev => {
+          if (ev["xaxis.range[0]"] !== undefined && ev["xaxis.range[1]"] !== undefined) {
+            const s = ev["xaxis.range[0]"];
+            const e = ev["xaxis.range[1]"];
+            plotMeta.forEach(p => {
+              if (p.div !== div) {
+                Plotly.relayout(p.div, { "xaxis.range": [s, e] });
+              }
+            });
+          }
         });
       });
     });
