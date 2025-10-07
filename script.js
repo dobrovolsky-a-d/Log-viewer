@@ -1,6 +1,5 @@
-// Subaru Log Viewer — PRO Smooth
-// Плавный маркер, без лагов. Мгновенное обновление на активном графике,
-// синхронное обновление на остальных через лёгкую задержку.
+// Subaru Log Viewer — PRO Smooth 2.0
+// Плавный, без лагов. Убран ModeBar, нормальный зум, цифры на пересечении.
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -17,13 +16,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let markerX = null;
   let syncTimer = null;
 
+  const config = { displayModeBar: false, responsive: true, scrollZoom: true };
+
   function setStatus(msg, ok = true) {
     status.textContent = msg;
     status.style.color = ok ? "#064e3b" : "#b91c1c";
   }
 
   function detectDelimiter(text) {
-    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0).slice(0, 5);
+    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim()).slice(0, 5);
     let comma = 0, semi = 0;
     lines.forEach(l => {
       comma += (l.match(/,/g) || []).length;
@@ -37,14 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let cur = "", inQuotes = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-        continue;
-      }
-      if (!inQuotes && ch === delimiter) {
-        res.push(cur);
-        cur = "";
-      } else cur += ch;
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (!inQuotes && ch === delimiter) { res.push(cur); cur = ""; }
+      else cur += ch;
     }
     res.push(cur);
     return res.map(s => s.replace(/^\uFEFF|\u200B/g, "").trim());
@@ -52,17 +48,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function parseCSVText(text) {
     const delim = detectDelimiter(text);
-    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim());
     if (lines.length < 2) return null;
     const header = splitLine(lines[0], delim);
     const data = [];
     for (let i = 1; i < lines.length; i++) {
       const vals = splitLine(lines[i], delim);
-      if (vals.length === 0) continue;
       const obj = {};
-      for (let j = 0; j < header.length; j++) {
-        obj[header[j]] = vals[j] !== undefined ? vals[j] : null;
-      }
+      for (let j = 0; j < header.length; j++) obj[header[j]] = vals[j] ?? null;
       data.push(obj);
     }
     return { fields: header, data };
@@ -82,8 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const lbl = document.createElement("label");
       lbl.htmlFor = chk.id;
       lbl.textContent = c;
-      item.appendChild(chk);
-      item.appendChild(lbl);
+      item.append(chk, lbl);
       columnsContainer.appendChild(item);
       chk.addEventListener("change", () => buildPlots());
     });
@@ -95,14 +87,21 @@ document.addEventListener("DOMContentLoaded", () => {
     let html = `<div class="marker-title">Время: ${row["Time"] || index}</div><div class="marker-list">`;
     plotMeta.forEach(m => {
       const v = row[m.col];
-      html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${v !== undefined ? v : "-"}</span></div>`;
+      html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${v ?? "-"}</span></div>`;
     });
     html += "</div>";
     markerBox.innerHTML = html;
     markerBox.style.display = "block";
   }
 
-  function drawMarkerOn(div, xVal) {
+  function drawMarker(div, xVal, yVal) {
+    const ann = yVal != null ? [{
+      x: xVal, y: yVal,
+      xref: "x", yref: "y",
+      text: yVal.toFixed ? yVal.toFixed(2) : yVal,
+      showarrow: false, font: { color: "crimson", size: 10 },
+      xanchor: "left", yanchor: "bottom"
+    }] : [];
     Plotly.relayout(div, {
       shapes: [{
         type: "line",
@@ -110,29 +109,28 @@ document.addEventListener("DOMContentLoaded", () => {
         y0: 0, y1: 1,
         xref: "x", yref: "paper",
         line: { color: "crimson", width: 1.5 }
-      }]
+      }],
+      annotations: ann
     }).catch(() => {});
   }
 
-  function syncMarkersLater(xVal, skipDiv) {
+  function syncMarkers(xVal, skipDiv) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       plotMeta.forEach(m => {
-        if (m.div !== skipDiv) drawMarkerOn(m.div, xVal);
+        if (m.div !== skipDiv) drawMarker(m.div, xVal, null);
       });
     }, 60);
   }
 
   function syncXRange(range) {
-    plotMeta.forEach(m => {
-      Plotly.relayout(m.div, { "xaxis.range": range }).catch(() => {});
-    });
+    plotMeta.forEach(m => Plotly.relayout(m.div, { "xaxis.range": range }).catch(() => {}));
   }
 
   function buildPlots() {
     if (!parsed) return;
     const xKey = "Time";
-    const checked = [...columnsContainer.querySelectorAll("input[type=checkbox]:checked")].map(i => i.dataset.col);
+    const checked = [...columnsContainer.querySelectorAll("input:checked")].map(i => i.dataset.col);
     if (checked.length === 0) return;
     plotsContainer.innerHTML = "";
     plotMeta = [];
@@ -147,50 +145,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const div = document.createElement("div");
       div.className = "plot";
-      div.id = "plot_" + idx;
       plotsContainer.appendChild(div);
 
       const trace = {
-        x: xVals,
-        y: y,
-        mode: "lines",
-        name: col,
-        line: { width: 2.5 }
+        x: xVals, y: y, mode: "lines", name: col, line: { width: 2.5 }
       };
       const layout = {
         title: col,
-        dragmode: "pan",
+        dragmode: "zoom",
         yaxis: { fixedrange: true },
         xaxis: { title: "Time" },
         margin: { t: 40, b: 40, l: 50, r: 10 }
       };
 
-      Plotly.newPlot(div, [trace], layout, { displaylogo: false, responsive: true }).then(() => {
-        div.on("plotly_hover", ev => {
-          const p = ev.points[0];
-          if (!p) return;
-          markerX = p.x;
-          drawMarkerOn(div, markerX);
-          syncMarkersLater(markerX, div);
-          updateMarkerBox(p.pointNumber);
-        });
-
+      Plotly.newPlot(div, [trace], layout, config).then(() => {
         div.on("plotly_click", ev => {
           const p = ev.points[0];
           if (!p) return;
           markerX = p.x;
-          drawMarkerOn(div, markerX);
-          syncMarkersLater(markerX, div);
+          drawMarker(div, p.x, p.y);
+          syncMarkers(p.x, div);
           updateMarkerBox(p.pointNumber);
         });
-
+        div.on("plotly_hover", ev => {
+          const p = ev.points[0];
+          if (!p) return;
+          markerX = p.x;
+          drawMarker(div, p.x, p.y);
+          syncMarkers(p.x, div);
+          updateMarkerBox(p.pointNumber);
+        });
         div.on("plotly_relayout", ev => {
-          if (ev["xaxis.range[0]"] && ev["xaxis.range[1]"]) {
+          if (ev["xaxis.range[0]"] && ev["xaxis.range[1]"])
             syncXRange([ev["xaxis.range[0]"], ev["xaxis.range[1]"]]);
-          } else if (ev["xaxis.autorange"]) {
-            syncXRange(null);
-          }
-          if (markerX !== null) syncMarkersLater(markerX);
+          else if (ev["xaxis.autorange"]) syncXRange(null);
+          if (markerX != null) syncMarkers(markerX);
         });
       });
       plotMeta.push({ div, col });
@@ -206,18 +195,13 @@ document.addEventListener("DOMContentLoaded", () => {
     setStatus("Чтение файла...");
     const fr = new FileReader();
     fr.onload = ev => {
-      const text = ev.target.result;
       try {
-        const res = parseCSVText(text);
-        parsed = res;
+        parsed = parseCSVText(ev.target.result);
         setStatus(`Файл загружен — ${parsed.data.length} строк`);
         buildColumnList(parsed.fields);
-        selectAllBtn.disabled = false;
-        deselectAllBtn.disabled = false;
+        selectAllBtn.disabled = deselectAllBtn.disabled = false;
         buildPlots();
-      } catch (err) {
-        setStatus("Ошибка парсинга: " + err.message, false);
-      }
+      } catch (err) { setStatus("Ошибка парсинга: " + err.message, false); }
     };
     fr.onerror = () => setStatus("Ошибка чтения файла", false);
     fr.readAsText(f, "utf-8");
@@ -230,12 +214,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   selectAllBtn.addEventListener("click", () => {
-    columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = true));
+    columnsContainer.querySelectorAll("input").forEach(cb => cb.checked = true);
     buildPlots();
   });
 
   deselectAllBtn.addEventListener("click", () => {
-    columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = false));
+    columnsContainer.querySelectorAll("input").forEach(cb => cb.checked = false);
     buildPlots();
   });
 });
