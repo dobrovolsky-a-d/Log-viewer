@@ -3,40 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Subaru Log Viewer — PRO</title>
+  <title>Subaru Log Viewer — PRO 1.0</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 
 <body>
-  <header>
-    <h1>Subaru Log Viewer — PRO</h1>
-    <p>Автоматическое построение графиков | Закреплённые значения | Быстрая работа</p>
+  <header class="header">
+    <div class="header-inner">
+      <div class="title">Subaru Log Viewer — <span class="muted">PRO 1.0</span></div>
+      <div class="subtitle">Стабильная версия — показывай с гордостью</div>
+    </div>
   </header>
 
   <main>
-    <section class="controls">
-      <label class="file-label">Выбрать CSV-файл
-        <input id="fileInput" type="file" accept=".csv,text/csv" />
-      </label>
+    <section class="controls card">
+      <div class="top-row">
+        <label class="file-label">Выбрать CSV-файл
+          <input id="fileInput" type="file" accept=".csv,text/csv" />
+        </label>
 
-      <div class="options-row">
-        <button id="resetZoomBtn" class="btn" disabled>Сбросить зум</button>
-        <button id="selectAllBtn" class="btn" disabled>Выбрать все</button>
-        <button id="deselectAllBtn" class="btn" disabled>Снять все</button>
+        <div class="action-buttons">
+          <button id="resetZoomBtn" class="btn" disabled>Сбросить зум</button>
+          <button id="selectAllBtn" class="btn" disabled>Выбрать все</button>
+          <button id="deselectAllBtn" class="btn" disabled>Снять все</button>
+        </div>
       </div>
 
       <div id="status" class="status">Файл не загружен</div>
-      <div id="columnsContainer" class="columns"></div>
+
+      <div id="columnsContainer" class="columns" aria-label="Список параметров"></div>
     </section>
 
-    <div id="markerData" class="marker-data" style="display:none"></div>
+    <section class="plots card">
+      <div id="markerData" class="marker-data" aria-live="polite" style="display:none"></div>
 
-    <section id="plotsContainer" class="plot-area"></section>
+      <div id="plotsContainer" class="plots-container"></div>
+
+      <div class="slider-row">
+        <input id="hSlider" type="range" min="0" max="100" value="0" step="0.1">
+      </div>
+    </section>
   </main>
 
-  <footer>
-    <small>© Subaru Log Viewer — PRO</small>
+  <footer class="footer">
+    <small>© Subaru Log Viewer — PRO 1.0</small>
   </footer>
 
   <script src="script.js"></script>
