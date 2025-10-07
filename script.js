@@ -1,5 +1,5 @@
-// Subaru Log Viewer — PRO Smooth 3.0
-// Двухпальцевый зум, цифры на всех графиках, плавное обновление без зависаний.
+// Subaru Log Viewer — PRO Smooth 3.1
+// Без красных цифр, двухпальцевый зум, плавная работа без лагов.
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let markerX = null;
   let syncTimer = null;
 
-  // отключаем зум одним пальцем, оставляем двухпальцевый pinch-zoom
   const config = { displayModeBar: false, responsive: true, scrollZoom: false };
 
   function setStatus(msg, ok = true) {
@@ -95,24 +94,10 @@ document.addEventListener("DOMContentLoaded", () => {
     markerBox.style.display = "block";
   }
 
-  function drawMarkersAll(xVal, rowIndex) {
+  function drawMarkersAll(xVal) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       plotMeta.forEach(m => {
-        const y = parseFloat(parsed.data[rowIndex]?.[m.col]?.replace(",", "."));
-        const ann = isFinite(y)
-          ? [{
-              x: xVal,
-              y: y,
-              xref: "x",
-              yref: "y",
-              text: y.toFixed(2),
-              showarrow: false,
-              font: { color: "crimson", size: 10 },
-              xanchor: "left",
-              yanchor: "bottom"
-            }]
-          : [];
         Plotly.relayout(m.div, {
           shapes: [{
             type: "line",
@@ -121,10 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
             xref: "x", yref: "paper",
             line: { color: "crimson", width: 1.5 }
           }],
-          annotations: ann
+          annotations: [] // убираем красные цифры
         }).catch(() => {});
       });
-    }, 30); // лёгкий debounce для плавности
+    }, 30);
   }
 
   function syncXRange(range) {
@@ -175,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
           markerX = p.x;
           const rowIndex = p.pointNumber;
           updateMarkerBox(rowIndex);
-          drawMarkersAll(markerX, rowIndex);
+          drawMarkersAll(markerX);
         };
         div.on("plotly_click", handleEvent);
         div.on("plotly_hover", handleEvent);
@@ -183,7 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (ev["xaxis.range[0]"] && ev["xaxis.range[1]"])
             syncXRange([ev["xaxis.range[0]"], ev["xaxis.range[1]"]]);
           else if (ev["xaxis.autorange"]) syncXRange(null);
-          if (markerX != null) drawMarkersAll(markerX, 0);
+          if (markerX != null) drawMarkersAll(markerX);
         });
       });
       plotMeta.push({ div, col });
