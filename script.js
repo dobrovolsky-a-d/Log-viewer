@@ -1,5 +1,5 @@
-// Subaru Log Viewer — PRO Smooth 2.0
-// Плавный, без лагов. Убран ModeBar, нормальный зум, цифры на пересечении.
+// Subaru Log Viewer — PRO Smooth 3.0
+// Двухпальцевый зум, цифры на всех графиках, плавное обновление без зависаний.
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -16,7 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let markerX = null;
   let syncTimer = null;
 
-  const config = { displayModeBar: false, responsive: true, scrollZoom: true };
+  // отключаем зум одним пальцем, оставляем двухпальцевый pinch-zoom
+  const config = { displayModeBar: false, responsive: true, scrollZoom: false };
 
   function setStatus(msg, ok = true) {
     status.textContent = msg;
@@ -94,37 +95,42 @@ document.addEventListener("DOMContentLoaded", () => {
     markerBox.style.display = "block";
   }
 
-  function drawMarker(div, xVal, yVal) {
-    const ann = yVal != null ? [{
-      x: xVal, y: yVal,
-      xref: "x", yref: "y",
-      text: yVal.toFixed ? yVal.toFixed(2) : yVal,
-      showarrow: false, font: { color: "crimson", size: 10 },
-      xanchor: "left", yanchor: "bottom"
-    }] : [];
-    Plotly.relayout(div, {
-      shapes: [{
-        type: "line",
-        x0: xVal, x1: xVal,
-        y0: 0, y1: 1,
-        xref: "x", yref: "paper",
-        line: { color: "crimson", width: 1.5 }
-      }],
-      annotations: ann
-    }).catch(() => {});
-  }
-
-  function syncMarkers(xVal, skipDiv) {
+  function drawMarkersAll(xVal, rowIndex) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       plotMeta.forEach(m => {
-        if (m.div !== skipDiv) drawMarker(m.div, xVal, null);
+        const y = parseFloat(parsed.data[rowIndex]?.[m.col]?.replace(",", "."));
+        const ann = isFinite(y)
+          ? [{
+              x: xVal,
+              y: y,
+              xref: "x",
+              yref: "y",
+              text: y.toFixed(2),
+              showarrow: false,
+              font: { color: "crimson", size: 10 },
+              xanchor: "left",
+              yanchor: "bottom"
+            }]
+          : [];
+        Plotly.relayout(m.div, {
+          shapes: [{
+            type: "line",
+            x0: xVal, x1: xVal,
+            y0: 0, y1: 1,
+            xref: "x", yref: "paper",
+            line: { color: "crimson", width: 1.5 }
+          }],
+          annotations: ann
+        }).catch(() => {});
       });
-    }, 60);
+    }, 30); // лёгкий debounce для плавности
   }
 
   function syncXRange(range) {
-    plotMeta.forEach(m => Plotly.relayout(m.div, { "xaxis.range": range }).catch(() => {}));
+    plotMeta.forEach(m =>
+      Plotly.relayout(m.div, { "xaxis.range": range }).catch(() => {})
+    );
   }
 
   function buildPlots() {
@@ -148,38 +154,36 @@ document.addEventListener("DOMContentLoaded", () => {
       plotsContainer.appendChild(div);
 
       const trace = {
-        x: xVals, y: y, mode: "lines", name: col, line: { width: 2.5 }
+        x: xVals,
+        y: y,
+        mode: "lines",
+        name: col,
+        line: { width: 2.5 }
       };
       const layout = {
         title: col,
-        dragmode: "zoom",
+        dragmode: "pan",
         yaxis: { fixedrange: true },
         xaxis: { title: "Time" },
         margin: { t: 40, b: 40, l: 50, r: 10 }
       };
 
       Plotly.newPlot(div, [trace], layout, config).then(() => {
-        div.on("plotly_click", ev => {
+        const handleEvent = ev => {
           const p = ev.points[0];
           if (!p) return;
           markerX = p.x;
-          drawMarker(div, p.x, p.y);
-          syncMarkers(p.x, div);
-          updateMarkerBox(p.pointNumber);
-        });
-        div.on("plotly_hover", ev => {
-          const p = ev.points[0];
-          if (!p) return;
-          markerX = p.x;
-          drawMarker(div, p.x, p.y);
-          syncMarkers(p.x, div);
-          updateMarkerBox(p.pointNumber);
-        });
+          const rowIndex = p.pointNumber;
+          updateMarkerBox(rowIndex);
+          drawMarkersAll(markerX, rowIndex);
+        };
+        div.on("plotly_click", handleEvent);
+        div.on("plotly_hover", handleEvent);
         div.on("plotly_relayout", ev => {
           if (ev["xaxis.range[0]"] && ev["xaxis.range[1]"])
             syncXRange([ev["xaxis.range[0]"], ev["xaxis.range[1]"]]);
           else if (ev["xaxis.autorange"]) syncXRange(null);
-          if (markerX != null) syncMarkers(markerX);
+          if (markerX != null) drawMarkersAll(markerX, 0);
         });
       });
       plotMeta.push({ div, col });
@@ -201,7 +205,9 @@ document.addEventListener("DOMContentLoaded", () => {
         buildColumnList(parsed.fields);
         selectAllBtn.disabled = deselectAllBtn.disabled = false;
         buildPlots();
-      } catch (err) { setStatus("Ошибка парсинга: " + err.message, false); }
+      } catch (err) {
+        setStatus("Ошибка парсинга: " + err.message, false);
+      }
     };
     fr.onerror = () => setStatus("Ошибка чтения файла", false);
     fr.readAsText(f, "utf-8");
@@ -214,12 +220,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   selectAllBtn.addEventListener("click", () => {
-    columnsContainer.querySelectorAll("input").forEach(cb => cb.checked = true);
+    columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = true));
     buildPlots();
   });
 
   deselectAllBtn.addEventListener("click", () => {
-    columnsContainer.querySelectorAll("input").forEach(cb => cb.checked = false);
+    columnsContainer.querySelectorAll("input").forEach(cb => (cb.checked = false));
     buildPlots();
   });
 });
