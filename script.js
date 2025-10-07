@@ -1,5 +1,4 @@
-// Subaru Log Viewer — PRO 1.2.1
-// фиксы: не исчезает при скролле, жёсткое ограничение диапазона X
+// Subaru Log Viewer — PRO (версия стабильная, ось X = время как вчера)
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -33,8 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const splitLine = (line, d) => {
     const res = []; let cur = "", inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+    for (let ch of line) {
       if (ch === '"') { inQ = !inQ; continue; }
       if (!inQ && ch === d) { res.push(cur); cur = ""; } else cur += ch;
     }
@@ -42,53 +40,50 @@ document.addEventListener("DOMContentLoaded", () => {
     return res.map(v => v.replace(/^\uFEFF|\u200B/g, "").trim());
   };
 
-  function parseCSV(txt) {
+  // простой парсер CSV
+  const parseCSV = (txt) => {
     const d = detectDelimiter(txt);
     const lines = txt.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) throw new Error("Файл пуст");
     const head = splitLine(lines[0], d);
-    const data = [];
-    for (let i = 1; i < lines.length; i++) {
-      const vals = splitLine(lines[i], d);
+    const data = lines.slice(1).map(l => {
+      const vals = splitLine(l, d);
       const obj = {};
-      for (let j = 0; j < head.length; j++) obj[head[j]] = vals[j] ?? null;
-      data.push(obj);
-    }
-    const timeKey = head.find(h => /time|timestamp|utc|date/i.test(h)) || head[0];
-    data.forEach(r => { r.__timeRaw = String(r[timeKey] ?? ""); });
-    return { fields: head, data, timeKey };
-  }
+      head.forEach((h, i) => obj[h] = vals[i] ?? null);
+      return obj;
+    });
 
-  function buildXFromTimeColumn(rows) {
-    const raw = rows.map(r => r.__timeRaw);
-    const nums = raw.map(s => {
-      if (s == null) return NaN;
-      const t = String(s).trim().replace(",", ".");
-      const n = Number(t);
-      return Number.isFinite(n) ? n : NaN;
+    // найти столбец времени
+    const timeKey = head.find(h => /time|timestamp|utc/i.test(h)) || head[0];
+
+    // добавить __sec — округлённые секунды
+    data.forEach((r, i) => {
+      const raw = parseFloat((r[timeKey] || "").replace(",", "."));
+      r.__sec = isFinite(raw) ? Math.round(raw) : i;
     });
-    const numericCount = nums.filter(v => Number.isFinite(v)).length;
-    if (numericCount / raw.length > 0.85) {
-      return { type: "numeric", xVals: nums, info: `numeric`, sample: raw.slice(0, 5) };
-    }
-    const dateObjs = raw.map(s => {
-      if (!s) return null;
-      const p = Date.parse(s);
-      if (!Number.isNaN(p)) return new Date(p);
-      const m = String(s).match(/^\s*(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
-      if (m) {
-        const now = new Date();
-        const h = +m[1], mm = +m[2], ss = +m[3], ms = +(m[4] || 0);
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, mm, ss, ms);
-      }
-      return null;
+
+    return { fields: head, data };
+  };
+
+  const buildColumnList = (cols) => {
+    columnsContainer.innerHTML = "";
+    cols.forEach((c, i) => {
+      if (/time|timestamp|utc/i.test(c)) return;
+      const el = document.createElement("div");
+      el.className = "column-item";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.id = "col_" + i;
+      chk.dataset.col = c;
+      if (/afr|rpm|maf|inj|duty|boost|press/i.test(c)) chk.checked = true;
+      const lb = document.createElement("label");
+      lb.htmlFor = chk.id;
+      lb.textContent = c;
+      el.append(chk, lb);
+      columnsContainer.append(el);
+      chk.addEventListener("change", buildPlots);
     });
-    const dateCount = dateObjs.filter(v => v instanceof Date && !isNaN(v)).length;
-    if (dateCount / raw.length > 0.75) {
-      return { type: "date", xVals: dateObjs.map(d => d ? d.toISOString() : null), info: `date`, sample: raw.slice(0, 5) };
-    }
-    return { type: "string", xVals: raw, info: `string`, sample: raw.slice(0, 5) };
-  }
+  };
 
   const clamp = (a, b, min, max) => {
     let s = a, e = b;
@@ -102,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateMarkerBox = (i) => {
     const row = parsed?.data[i];
     if (!row) return;
-    let html = `<div class="marker-title">Time: ${row.__timeRaw}</div><div class="marker-list">`;
+    let html = `<div class="marker-title">Время: ${row.__sec} с</div><div class="marker-list">`;
     plotMeta.forEach(m => html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${row[m.col] ?? "-"}</span></div>`);
     markerBox.innerHTML = html + "</div>";
     markerBox.style.display = "block";
@@ -131,45 +126,16 @@ document.addEventListener("DOMContentLoaded", () => {
     plotMeta.forEach(p => p.range = [s, e]);
   });
 
-  const buildColumnList = (cols) => {
-    columnsContainer.innerHTML = "";
-    cols.forEach((c, i) => {
-      if (/time|timestamp|date/i.test(c)) return;
-      const el = document.createElement("div");
-      el.className = "column-item";
-      const chk = document.createElement("input");
-      chk.type = "checkbox";
-      chk.id = "col_" + i;
-      chk.dataset.col = c;
-      if (/afr|rpm|maf|inj|duty|boost|press/i.test(c)) chk.checked = true;
-      const lb = document.createElement("label");
-      lb.htmlFor = chk.id;
-      lb.textContent = c;
-      el.append(chk, lb);
-      columnsContainer.append(el);
-      chk.addEventListener("change", buildPlots);
-    });
-  };
-
   const buildPlots = () => {
     if (!parsed) return;
-    const timeInfo = buildXFromTimeColumn(parsed.data);
+    const xKey = "__sec";
     const selected = [...columnsContainer.querySelectorAll("input:checked")].map(x => x.dataset.col);
     if (!selected.length) { plotsContainer.innerHTML = ""; plotMeta = []; return; }
 
     plotsContainer.innerHTML = "";
     plotMeta = [];
-    const x = timeInfo.xVals;
-    let xMin = 0, xMax = parsed.data.length;
-    if (timeInfo.type === "numeric") {
-      const vals = x.filter(v => Number.isFinite(v));
-      xMin = Math.min(...vals); xMax = Math.max(...vals);
-    } else if (timeInfo.type === "date") {
-      const vals = x.map(v => Date.parse(v)).filter(v => Number.isFinite(v));
-      xMin = Math.min(...vals); xMax = Math.max(...vals);
-    }
-
-    setStatus(`Ось X: ${timeInfo.type} (${timeInfo.sample.join(", ")})`);
+    const x = parsed.data.map(r => r[xKey]);
+    const xMin = Math.min(...x), xMax = Math.max(...x);
 
     const builds = selected.map(col => {
       const y = parsed.data.map(r => {
@@ -182,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const trace = { x, y, mode: "lines", name: col, line: { width: 2.5 } };
       const layout = {
         title: col,
-        xaxis: { title: "time", type: timeInfo.type === "date" ? "date" : "linear" },
+        xaxis: { title: "секунды", tickformat: "d" },
         yaxis: { fixedrange: true },
         margin: { t: 38, l: 50, r: 10, b: 40 }
       };
@@ -197,11 +163,6 @@ document.addEventListener("DOMContentLoaded", () => {
         div.on("plotly_relayout", ev => {
           if (ev["xaxis.range[0]"] !== undefined && ev["xaxis.range[1]"] !== undefined) {
             let r0 = ev["xaxis.range[0]"], r1 = ev["xaxis.range[1]"];
-            if (timeInfo.type === "date") {
-              r0 = Date.parse(r0);
-              r1 = Date.parse(r1);
-            }
-            // 🚧 ограничиваем диапазон
             const [s, e] = clamp(r0, r1, meta.xMin, meta.xMax);
             if (e - s < 0.001) return;
             applyRange([s, e]);
