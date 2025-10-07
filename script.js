@@ -1,5 +1,4 @@
-// Subaru Log Viewer — PRO 1.2
-// фиксы: чтение CSV, ползунок, целые секунды, безопасное поведение на iPhone
+// Subaru Log Viewer — PRO 1.2 (фикс парсинга времени hh:mm:ss.xxx)
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -41,6 +40,25 @@ document.addEventListener("DOMContentLoaded", () => {
     return res.map(v => v.replace(/^\uFEFF|\u200B/g, "").trim());
   };
 
+  // 🔧 новая функция парсинга времени
+  const parseTimeToSec = (val, baseSec = 0) => {
+    if (!val) return baseSec;
+    // если просто число
+    const n = parseFloat(val);
+    if (isFinite(n)) return n;
+
+    // если формат hh:mm:ss.xxx
+    const m = val.match(/(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
+    if (m) {
+      const h = +m[1], mi = +m[2], s = +m[3], ms = +(m[4] || 0);
+      return Math.round((h * 3600 + mi * 60 + s + ms / 1000) - baseSec);
+    }
+    // если дата
+    const t = Date.parse(val);
+    if (isFinite(t)) return Math.round(t / 1000 - baseSec);
+    return baseSec;
+  };
+
   const parseCSV = (txt) => {
     const d = detectDelimiter(txt);
     const lines = txt.split(/\r?\n/).filter(l => l.trim());
@@ -54,17 +72,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const timeKey = head.find(h => /time|timestamp|utc|date/i.test(h)) || head[0];
-    const base = +new Date();
+
+    // вычисляем базу — первый момент времени
+    let baseSec = 0;
+    for (let i = 0; i < data.length; i++) {
+      const sec = parseTimeToSec(data[i][timeKey]);
+      if (sec > 0) { baseSec = sec; break; }
+    }
+
     data.forEach((r, i) => {
-      const val = r[timeKey];
-      let sec;
-      const n = parseFloat(val);
-      if (isFinite(n)) sec = Math.round(n);
-      else {
-        const t = Date.parse(val);
-        sec = isFinite(t) ? Math.round((t - base) / 1000) : i;
-      }
-      r.__sec = sec;
+      const sec = parseTimeToSec(r[timeKey], baseSec);
+      r.__sec = Math.round(sec);
     });
     return { fields: head, data };
   };
