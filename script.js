@@ -1,5 +1,5 @@
-// Subaru Log Viewer — PRO 1.1
-// фиксированный ползунок, двойной pinch-zoom, без однопальцевого, точный счётчик графиков
+// Subaru Log Viewer — PRO 1.2
+// фиксы: чтение CSV, ползунок, целые секунды, безопасное поведение на iPhone
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("fileInput");
@@ -54,27 +54,18 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const timeKey = head.find(h => /time|timestamp|utc|date/i.test(h)) || head[0];
-    const baseMs = (() => {
-      const f = data.find(r => r[timeKey]);
-      const v = f ? +r[timeKey] : 0;
-      return isFinite(v) && v > 1e9 ? v : Date.now();
-    })();
-
+    const base = +new Date();
     data.forEach((r, i) => {
       const val = r[timeKey];
       let sec;
-      if (!val) sec = i;
+      const n = parseFloat(val);
+      if (isFinite(n)) sec = Math.round(n);
       else {
-        const n = +val;
-        if (isFinite(n)) sec = Math.abs(n) > 1e9 ? (n - baseMs) / 1000 : n;
-        else {
-          const t = Date.parse(val);
-          sec = isFinite(t) ? (t - baseMs) / 1000 : i;
-        }
+        const t = Date.parse(val);
+        sec = isFinite(t) ? Math.round((t - base) / 1000) : i;
       }
-      r.__sec = +sec.toFixed(3);
+      r.__sec = sec;
     });
-
     return { fields: head, data };
   };
 
@@ -110,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateMarkerBox = (i) => {
     const row = parsed?.data[i];
     if (!row) return;
-    let html = `<div class="marker-title">Время: ${row.__sec.toFixed(3)} с</div><div class="marker-list">`;
+    let html = `<div class="marker-title">Время: ${row.__sec} с</div><div class="marker-list">`;
     plotMeta.forEach(m => html += `<div class="marker-row"><span class="marker-key">${m.col}</span><span class="marker-val">${row[m.col] ?? "-"}</span></div>`);
     markerBox.innerHTML = html + "</div>";
     markerBox.style.display = "block";
@@ -139,29 +130,6 @@ document.addEventListener("DOMContentLoaded", () => {
     plotMeta.forEach(p => p.range = [s, e]);
   });
 
-  const attachPinch = (div, meta) => {
-    let last = null;
-    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    div.addEventListener("touchstart", e => {
-      if (e.touches.length === 2) last = dist(e.touches);
-    }, { passive: true });
-    div.addEventListener("touchmove", e => {
-      if (e.touches.length !== 2 || !last) return;
-      const d = dist(e.touches);
-      const scale = d / last;
-      last = d;
-      const xaxis = div._fullLayout?.xaxis;
-      if (!xaxis) return;
-      const [s0, e0] = xaxis.range;
-      const c = (s0 + e0) / 2;
-      const w = (e0 - s0) / scale;
-      const [s, e] = clamp(c - w / 2, c + w / 2, meta.xMin, meta.xMax);
-      applyRange([s, e]);
-      plotMeta.forEach(p => p.range = [s, e]);
-      e.preventDefault();
-    }, { passive: false });
-  };
-
   const buildPlots = () => {
     if (!parsed) return;
     const xKey = "__sec";
@@ -182,26 +150,20 @@ document.addEventListener("DOMContentLoaded", () => {
       div.className = "plot";
       plotsContainer.append(div);
       const trace = { x, y, mode: "lines", name: col, line: { width: 2.5 } };
-      const layout = { title: col, xaxis: { title: "секунды", tickformat: ".3f" }, yaxis: { fixedrange: true }, margin: { t: 38, l: 50, r: 10, b: 40 } };
+      const layout = {
+        title: col,
+        xaxis: { title: "секунды", tickformat: "d" },
+        yaxis: { fixedrange: true },
+        margin: { t: 38, l: 50, r: 10, b: 40 }
+      };
       return Plotly.newPlot(div, [trace], layout, CONFIG).then(() => {
         const meta = { div, col, xMin, xMax, range: [xMin, xMin + (xMax - xMin) / 5] };
         plotMeta.push(meta);
-
-        const mark = ev => {
+        div.querySelector(".main-svg").style.touchAction = "none";
+        div.on("plotly_click", ev => {
           const p = ev.points?.[0]; if (!p) return;
           markerX = p.x; updateMarkerBox(p.pointNumber); drawMarkersAll(markerX);
-        };
-        div.on("plotly_click", mark);
-        div.on("plotly_hover", mark);
-        div.on("plotly_relayout", ev => {
-          if (ev["xaxis.range[0]"]) {
-            const r = [ev["xaxis.range[0]"], ev["xaxis.range[1]"]];
-            const [s, e] = clamp(r[0], r[1], xMin, xMax);
-            applyRange([s, e]);
-            plotMeta.forEach(p => p.range = [s, e]);
-          }
         });
-        attachPinch(div, meta);
       });
     });
 
@@ -212,7 +174,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   fileInput.addEventListener("change", e => {
-    const f = e.target.files[0]; if (!f) return;
+    const f = e.target.files[0];
+    if (!f) return;
     const fr = new FileReader();
     setStatus("Чтение файла...");
     fr.onload = ev => {
