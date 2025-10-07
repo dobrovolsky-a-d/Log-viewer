@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Subaru Log Viewer — PRO 1.1</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Subaru Log Viewer — PRO 1.2</title>
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="script.js" defer></script>
 </head>
 
 <body>
   <header class="header">
     <div class="header-inner">
-      <div class="title">Subaru Log Viewer — <span class="muted">PRO 1.1</span></div>
-      <div class="subtitle">Стабильная версия с улучшенным управлением</div>
+      <div class="title">Subaru Log Viewer — <span class="muted">PRO 1.2</span></div>
+      <div class="subtitle">Улучшенная версия с фиксами чтения логов и безопасным управлением</div>
     </div>
   </header>
 
@@ -40,15 +41,13 @@
     </section>
   </main>
 
-  <!-- закреплённый общий ползунок -->
+  <!-- зафиксированный общий ползунок -->
   <div class="global-slider">
     <input id="hSlider" type="range" min="0" max="100" value="0" step="0.1">
   </div>
 
   <footer class="footer">
-    <small>© Subaru Log Viewer — PRO 1.1</small>
+    <small>© Subaru Log Viewer — PRO 1.2</small>
   </footer>
-
-  <script src="script.js"></script>
 </body>
 </html>
