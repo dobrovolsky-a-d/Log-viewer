@@ -1,4 +1,4 @@
-// Subaru Log Viewer — PRO Lite 1.0
+// Subaru Log Viewer — Lite 1.0
 // Основано на Smooth 3.1: стабильность + синхронное движение всех графиков по оси X
 
 document.addEventListener("DOMContentLoaded", () => {
