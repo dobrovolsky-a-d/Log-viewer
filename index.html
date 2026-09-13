@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DoKu Log Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-doku">DoKu</span>
+        <span class="logo-log">Log</span>
+      </div>
+      <div class="logo-sub">Subaru Tuning Lab</div>
+    </div>
+
+    <!-- FILES -->
+    <div class="sidebar-section">
+      <div class="section-label">Файлы</div>
+      <label class="add-file-btn" id="addFileLabel">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Добавить лог
+        <input type="file" id="fileInput" accept=".csv" multiple style="display:none" />
+      </label>
+      <div id="fileList" class="file-list"></div>
+    </div>
+
+    <!-- PARAMETERS -->
+    <div class="sidebar-section params-section" id="paramsSection" style="display:none">
+      <div class="section-label">
+        Параметры
+        <div class="param-actions">
+          <button class="link-btn" id="selectAllBtn">все</button>
+          <span class="sep">·</span>
+          <button class="link-btn" id="deselectAllBtn">снять</button>
+        </div>
+      </div>
+      <div id="paramSearch" class="param-search-wrap">
+        <input type="text" id="paramSearchInput" class="param-search" placeholder="Поиск параметра..." />
+      </div>
+      <div id="paramGroups" class="param-groups"></div>
+    </div>
+
+    <!-- OVERLAY SETTINGS (visible in overlay mode) -->
+    <div class="sidebar-section" id="overlaySection" style="display:none">
+      <div class="section-label">Наложение</div>
+      <div class="overlay-tip">Выбранные параметры строятся на одном графике. Используй оси Y1/Y2 для разных диапазонов.</div>
+      <div id="axisAssign" class="axis-assign"></div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebarToggle" title="Скрыть/показать панель">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="1.5" rx=".75" fill="currentColor"/><rect x="2" y="8.25" width="14" height="1.5" rx=".75" fill="currentColor"/><rect x="2" y="12.5" width="14" height="1.5" rx=".75" fill="currentColor"/></svg>
+      </button>
+
+      <!-- MODE TOGGLE -->
+      <div class="mode-toggle" id="modeToggle">
+        <button class="mode-btn active" data-mode="stacked" id="modeStacked">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="9" width="14" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+          Стек
+        </button>
+        <button class="mode-btn" data-mode="overlay" id="modeOverlay">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 13 L5 5 L9 9 L13 3 L15 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 13 L4 8 L7 10 L11 5 L15 8" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 1.5"/></svg>
+          Overlay
+        </button>
+      </div>
+
+      <!-- ZOOM CONTROLS -->
+      <div class="zoom-controls" id="zoomControls">
+        <button class="icon-btn" id="resetZoomBtn" title="Сбросить зум" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h4v4M14 14h-4v-4M2 2l4.5 4.5M14 14l-4.5-4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn" id="syncZoomBtn" title="Синхронизировать зум" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8a7 7 0 1 0 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M1 4v4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <div class="topbar-status" id="topbarStatus">Загрузите CSV-лог RomRaider / EcuFlash</div>
+    </header>
+
+    <!-- CROSSHAIR INFO BAR -->
+    <div class="crosshair-bar" id="crosshairBar" style="display:none">
+      <div class="crosshair-time" id="crosshairTime">—</div>
+      <div class="crosshair-values" id="crosshairValues"></div>
+    </div>
+
+    <!-- PLOTS AREA -->
+    <div class="plots-wrap" id="plotsWrap">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="4" y="28" width="6" height="14" rx="1.5" fill="#2563eb" opacity=".25"/><rect x="14" y="18" width="6" height="24" rx="1.5" fill="#2563eb" opacity=".45"/><rect x="24" y="10" width="6" height="32" rx="1.5" fill="#2563eb" opacity=".65"/><rect x="34" y="20" width="6" height="22" rx="1.5" fill="#2563eb" opacity=".85"/></svg>
+        </div>
+        <div class="empty-title">Нет данных</div>
+        <div class="empty-desc">Добавь CSV-лог через панель слева.<br/>Поддерживается RomRaider и EcuFlash.</div>
+      </div>
+      <div id="plotsContainer" class="plots-container"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
