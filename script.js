@@ -133,11 +133,40 @@ function parseCSV(text) {
     rows.push(row);
   }
 
-  // Parse time to float seconds (RomRaider: "0.000" format)
-  const timeValues = rows.map(r => {
-    const v = parseFloat(String(r[timeKey]).replace(',', '.'));
-    return isNaN(v) ? null : v;
-  });
+  // Parse a time cell into seconds. Handles:
+  //  - plain floats: "0.190", "12,340"
+  //  - wall-clock stamps: "18:40:01.841" (HH:MM:SS.mmm) or "40:01.841" (MM:SS.mmm)
+  function parseTimeToSeconds(raw) {
+    const s = String(raw).trim();
+
+    let m = s.match(/^(\d{1,3}):(\d{2}):(\d{2})(?:[.,](\d+))?$/);
+    if (m) {
+      const h = parseInt(m[1], 10), mi = parseInt(m[2], 10), se = parseInt(m[3], 10);
+      const frac = m[4] ? parseFloat('0.' + m[4]) : 0;
+      return h * 3600 + mi * 60 + se + frac;
+    }
+
+    m = s.match(/^(\d{1,3}):(\d{2})(?:[.,](\d+))?$/);
+    if (m) {
+      const mi = parseInt(m[1], 10), se = parseInt(m[2], 10);
+      const frac = m[3] ? parseFloat('0.' + m[3]) : 0;
+      return mi * 60 + se + frac;
+    }
+
+    const f = parseFloat(s.replace(',', '.'));
+    return isNaN(f) ? null : f;
+  }
+
+  // Parse time to float seconds, normalized so the log starts at t=0 —
+  // wall-clock stamps like "18:40:01.841" become elapsed seconds instead
+  // of a near-constant "18" (which is what naive parseFloat gives them).
+  const timeValues = rows.map(r => parseTimeToSeconds(r[timeKey]));
+  const t0 = timeValues.find(v => v !== null && v !== undefined);
+  if (t0 !== null && t0 !== undefined) {
+    for (let i = 0; i < timeValues.length; i++) {
+      if (timeValues[i] !== null) timeValues[i] -= t0;
+    }
+  }
 
   return { headers, units, timeKey, timeValues, rows };
 }
