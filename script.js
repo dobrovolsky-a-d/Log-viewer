@@ -79,6 +79,15 @@ function splitLine(line, d) {
   return out;
 }
 
+// Splits "Engine Speed (rpm)" -> { name: "Engine Speed", unit: "rpm" }.
+// Headers without a trailing (unit) are returned unchanged.
+function splitHeaderNameUnit(raw) {
+  const h = raw.trim();
+  const m = h.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  if (m && m[1].trim()) return { name: m[1].trim(), unit: m[2].trim() };
+  return { name: h, unit: '' };
+}
+
 function parseCSV(text) {
   const d = detectDelimiter(text);
   const rawLines = text.split(/\r?\n/);
@@ -87,28 +96,33 @@ function parseCSV(text) {
 
   const headerLine = splitLine(lines[0], d);
 
-  // RomRaider has units on the second row
+  // Some exports (older RomRaider/EPCS) put units on a separate second row
+  // instead of embedding them in the header, e.g. "RPM" / "(rpm)".
   let unitsLine = null;
   let dataStart = 1;
   if (lines.length > 2) {
     const secondRow = splitLine(lines[1], d);
     const isUnitsRow = secondRow.every(v =>
-      v === '' || /^\(.*\)$/.test(v.trim()) || /^[a-z°%\/]+$/i.test(v.trim())
-    );
+      v === '' || /^\(.*\)$/.test(v.trim()) || /^[a-z°%\/]{1,8}$/i.test(v.trim())
+    ) && secondRow.some(v => v.trim() !== '');
     if (isUnitsRow) {
       unitsLine = secondRow;
       dataStart = 2;
     }
   }
 
-  // Clean header names
-  const headers = headerLine.map(h => h.replace(/^\(|\)$/g, '').trim());
-  const units = unitsLine
-    ? unitsLine.map(u => u.replace(/^\(|\)$/g, '').trim())
-    : headers.map(() => '');
+  // Clean header names — split inline "(unit)" suffix when present,
+  // otherwise fall back to the separate units row (if any).
+  const headers = [];
+  const units = [];
+  headerLine.forEach((raw, i) => {
+    const { name, unit } = splitHeaderNameUnit(raw);
+    headers.push(name);
+    units.push(unit || (unitsLine ? (unitsLine[i] || '').replace(/^\(|\)$/g, '').trim() : ''));
+  });
 
-  // Find time column
-  const timeKey = headers.find(h => /^time$/i.test(h) || /^timestamp/i.test(h) || /utc/i.test(h)) || headers[0];
+  // Find time column (match against the CLEANED name)
+  const timeKey = headers.find(h => /^time$/i.test(h) || /^timestamp$/i.test(h) || /utc/i.test(h)) || headers[0];
   const timeIdx = headers.indexOf(timeKey);
 
   const rows = [];
@@ -390,11 +404,14 @@ function buildStacked() {
   plotsContainer.className = 'plots-container';
   state.plots = [];
 
+  // Decide empty-state from the SELECTION, not from state.plots — the
+  // Plotly.newPlot() calls below resolve asynchronously, so state.plots
+  // is still empty at this point even when params are selected.
+  showEmpty(state.selectedParams.size === 0);
+
   state.selectedParams.forEach(param => {
     appendStackedCard(param);
   });
-
-  showEmpty(state.plots.length === 0);
 }
 
 function appendStackedCard(param) {
@@ -706,6 +723,12 @@ function updateStatus() {
 }
 
 function rebuildAll() {
+  // Any full rebuild (file added/removed, mode switch) should start
+  // from the full data range — stale zoom from a previous view should
+  // never silently carry over and truncate the new charts.
+  state.zoomRange = null;
+  resetZoomBtn.disabled = true;
+
   renderFileList();
   if (state.files.length === 0) {
     paramsSection.style.display = 'none';
